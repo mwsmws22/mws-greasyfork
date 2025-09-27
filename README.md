@@ -1,13 +1,14 @@
-# Tampermonkey Scripts Collection
+# mws-greasyfork
 
-This repository is a collection of Tampermonkey scripts for my personal use. Each script is a JavaScript file located in the root of this repository. Below is the documentation for each script.
+This is my personal repository of Tampermonkey scripts, specifically ones hosted on [Greasy Fork](https://greasyfork.org/en).
 
 ## Scripts
 
 ### google-interface-cleanup-fixed.js
 
-**Original Source**  
 All credit goes to the original author, antics1. See [Google interface cleanup](https://greasyfork.org/en/scripts/504171-google-interface-cleanup).
+
+My fixed version: [Google interface cleanup fixed](https://greasyfork.org/en/scripts/550855-google-interface-cleanup-fixed).
 
 Unfortunately, the original script no longer works in its current state. I fixed it and also added a bunch of personal preferences tweaks.
 

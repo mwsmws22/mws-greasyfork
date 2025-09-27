@@ -1,13 +1,17 @@
 // ==UserScript==
 // @name         Google interface cleanup fixed
-// @description  Remove junk from Google search results like "People also ask", etc.
+// @namespace    mwsmws22
+// @version      1.0.1
+// @author       mwsmws22
 // @license      MIT
-// @version      130
+// @description  Remove junk from Google search results like "People also ask", etc.
 // @match        https://*.google.com/search*
 // @match        https://*.google.ca/search*
 // @match        https://*.google.fr/search*
 // @match        https://*.google.co.uk/search*
 // @run-at       document-end
+// @downloadURL https://update.greasyfork.org/scripts/550855/Google%20interface%20cleanup%20fixed.user.js
+// @updateURL https://update.greasyfork.org/scripts/550855/Google%20interface%20cleanup%20fixed.meta.js
 // ==/UserScript==
 
 const annoyances = [
