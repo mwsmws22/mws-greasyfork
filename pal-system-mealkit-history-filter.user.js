@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Pal System Meal Kit History Filter
 // @namespace    mwsmws22
-// @version      0.1.0
+// @version      0.1.1
 // @author       mwsmws22
 // @license      MIT
 // @description  Hide or highlight meal kits already tried, based on Paperless titles.
@@ -373,12 +373,19 @@
     return triedTitles.has(normalizedName);
   }
 
+  /** NFKC folds full-width digits (e.g. １ vs 1) so page text matches Paperless titles. */
+  function normalizeComparableText(s) {
+    return String(s).trim().normalize("NFKC");
+  }
+
   function normalizeMealKitName(name) {
-    return stripTitleSubstrings(String(name)).replace(TITLE_SUFFIX_REGEX, "").trim();
+    return stripTitleSubstrings(normalizeComparableText(name))
+      .replace(TITLE_SUFFIX_REGEX, "")
+      .trim();
   }
 
   function normalizePaperlessTitle(name) {
-    const cleaned = String(name).trim();
+    const cleaned = normalizeComparableText(name);
     if (!cleaned) {
       return cleaned;
     }
