@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Pal System Meal Kit History Filter
 // @namespace    mwsmws22
-// @version      0.1.2
+// @version      0.1.4
 // @author       mwsmws22
 // @license      MIT
 // @description  Hide or highlight meal kits already tried, based on Paperless titles.
@@ -31,9 +31,8 @@
   const MARK_ATTR = "data-pal-mealkit-filter-marked";
   const ORIGINAL_STYLE_ATTR = "data-pal-mealkit-filter-original-style";
   const TITLE_SUFFIX_REGEX = /\s*\d+\s*セット\s*$/;
-  const TITLE_SUBSTRINGS_TO_REMOVE = ["【冷凍】", "(4～5人分)"];
-  /** After NFKC, parens/digits are half-width ASCII; strip so 2人分/3人分 variants share one key. */
-  const SERVING_SIZE_PAREN_REGEX = /\(\s*\d+\s*人分\s*\)/g;
+  /** Apply these patterns to both PAL and Paperless titles before comparison. */
+  const TITLE_NOISE_PATTERNS = [/【冷凍】/g, /\([^)]*人分\s*\)/g];
   const REAPPLY_INTERVAL_MS = 1200;
 
   let triedTitles = new Set();
@@ -380,37 +379,25 @@
     return String(s).trim().normalize("NFKC");
   }
 
-  function stripServingSizeParenthetical(name) {
-    return String(name)
-      .replace(SERVING_SIZE_PAREN_REGEX, "")
-      .replace(/\s+/g, " ")
-      .trim();
+  function stripComparableTitleNoise(name) {
+    let cleaned = String(name);
+    for (const pattern of TITLE_NOISE_PATTERNS) {
+      cleaned = cleaned.replace(pattern, "");
+    }
+    return cleaned.replace(/\s+/g, " ").trim();
   }
 
   function normalizeMealKitName(name) {
-    let n = stripTitleSubstrings(normalizeComparableText(name));
-    n = stripServingSizeParenthetical(n);
+    let n = stripComparableTitleNoise(normalizeComparableText(name));
     return n.replace(TITLE_SUFFIX_REGEX, "").trim();
   }
 
   function normalizePaperlessTitle(name) {
-    let cleaned = normalizeComparableText(name);
-    if (!cleaned) {
-      return cleaned;
-    }
-    cleaned = stripServingSizeParenthetical(cleaned);
+    let cleaned = stripComparableTitleNoise(normalizeComparableText(name));
     if (!cleaned) {
       return cleaned;
     }
     return cleaned.endsWith("セット") ? cleaned : `${cleaned}セット`;
-  }
-
-  function stripTitleSubstrings(name) {
-    let result = String(name).trim();
-    for (const token of TITLE_SUBSTRINGS_TO_REMOVE) {
-      result = result.split(token).join("");
-    }
-    return result.trim();
   }
 
   function applyModeToItem(itemNode, isMatch) {
