@@ -210,7 +210,6 @@
     for (const button of buttons) {
       switchWrap.appendChild(button);
     }
-    syncModeButtons();
 
     const status = document.createElement("span");
     status.id = "pal-mealkit-filter-status";
@@ -219,6 +218,7 @@
 
     bar.append(label, switchWrap, status);
     itemSectionInner.insertBefore(bar, itemSectionInner.firstChild);
+    syncModeButtons();
   }
 
   function createModeButton(mode, text) {
