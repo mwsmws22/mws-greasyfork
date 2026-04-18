@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Pal System Meal Kit History Filter
 // @namespace    mwsmws22
-// @version      0.1.6
+// @version      0.2.5
 // @author       mwsmws22
 // @license      MIT
 // @description  Hide or highlight meal kits already tried, based on Paperless titles.
@@ -89,82 +89,173 @@
     const style = document.createElement("style");
     style.id = "pal-mealkit-filter-style";
     style.textContent = `
-      .pal-mealkit-filter-bar {
+      /* Light mode is the default; use #id + !important so host CSS cannot wash out text. */
+      #pal-mealkit-filter-bar.pal-mealkit-filter-bar {
         margin: 2px 0 18px;
-        padding: 12px 14px;
-        background: #f8fafc;
-        border: 1px solid #cfd8e3;
+        padding: 18px 20px;
+        width: 100%;
+        max-width: 100%;
+        background: #ffffff;
+        border: 1px solid #e4e7ec;
         border-radius: 12px;
-        box-shadow: 0 8px 20px rgba(16, 24, 40, 0.08);
+        box-shadow: 0 4px 16px rgba(16, 24, 40, 0.06);
+        display: flex;
+        align-items: center;
+        gap: 16px;
+        font-size: 14px;
+        flex-wrap: nowrap;
+        box-sizing: border-box;
+      }
+      .pal-mealkit-filter-bar-left {
         display: flex;
         align-items: center;
         gap: 14px;
-        font-size: 14px;
+        flex: 1 1 auto;
+        min-width: 0;
         flex-wrap: wrap;
       }
-      .pal-mealkit-filter-label {
+      .pal-mealkit-filter-bar-trail {
+        display: flex;
+        align-items: center;
+        justify-content: flex-end;
+        flex-shrink: 0;
+        margin-left: auto;
+      }
+      /* Primary action — same blue language as Highlight (light UI). */
+      #pal-mealkit-filter-bar .pal-mealkit-filter-display-btn {
+        -webkit-appearance: none !important;
+        appearance: none !important;
+        flex-shrink: 0;
+        box-sizing: border-box;
+        border: 1px solid #334155 !important;
+        border-radius: 8px;
+        padding: 8px 16px !important;
+        background: #1f2937 !important;
+        color: #f8fafc !important;
         font-weight: 600;
-        color: #2a2a2a;
-      }
-      .pal-mealkit-filter-switch {
-        display: inline-flex;
-        gap: 6px;
-        padding: 6px;
-        border-radius: 999px;
-        background: #e9eef5;
-        border: 1px solid #cfd8e3;
-      }
-      .pal-mealkit-filter-switch-btn {
-        border: 0;
-        border-radius: 999px;
-        padding: 7px 16px;
-        min-width: 76px;
-        background: transparent;
-        color: #344054;
-        font-weight: 700;
         font-size: 12px;
-        line-height: 1.2;
+        line-height: 1.35;
         cursor: pointer;
-        transition: all 120ms ease;
+        transition: background 120ms ease, border-color 120ms ease, color 120ms ease;
       }
-      .pal-mealkit-filter-switch-btn:hover {
-        color: #1d2939;
+      #pal-mealkit-filter-bar .pal-mealkit-filter-display-btn:hover {
+        background: #334155 !important;
+        border-color: #475569 !important;
+        color: #ffffff !important;
       }
-      .pal-mealkit-filter-switch-btn.is-active {
-        background: #ffffff;
-        color: #111827;
-        box-shadow: 0 2px 8px rgba(16, 24, 40, 0.18);
+      #pal-mealkit-filter-bar .pal-mealkit-filter-display-btn.is-active {
+        background: #1570ef !important;
+        border-color: #1570ef !important;
+        color: #ffffff !important;
       }
-      .pal-mealkit-filter-status {
-        color: #475467;
+      [data-pal-mealkit-filter-host] .item-section-header .vue-items-display-setting {
+        display: none !important;
+      }
+      [data-pal-mealkit-filter-host] .item-section-header .controller-line:has(.count-group) {
+        display: none !important;
+      }
+      #pal-mealkit-filter-bar .pal-mealkit-filter-label {
+        font-weight: 600;
+        color: #0f172a !important;
+        letter-spacing: 0.01em;
+      }
+      /* Segmented group: outer rounded shell; inner joins square; inactive = light outline style. */
+      #pal-mealkit-filter-bar .pal-mealkit-filter-switch {
+        display: inline-flex;
+        flex-direction: row;
+        align-items: center;
+        padding: 0 !important;
+        gap: 0 !important;
+        border-radius: 8px;
+        border: 1px solid #cbd5e1 !important;
+        background: #ffffff !important;
+        overflow: hidden;
+        box-sizing: border-box;
+        align-self: center;
+      }
+      #pal-mealkit-filter-bar .pal-mealkit-filter-switch-btn {
+        -webkit-appearance: none !important;
+        appearance: none !important;
+        margin: 0 !important;
+        box-sizing: border-box;
+        border: none !important;
+        border-right: 1px solid #cbd5e1 !important;
+        border-radius: 0 !important;
+        padding: 8px 16px !important;
+        min-height: 0;
+        min-width: 0;
+        width: auto;
+        background: #ffffff !important;
+        color: #1e293b !important;
+        font-weight: 600;
         font-size: 12px;
+        line-height: 1.4;
+        cursor: pointer;
+        transition: background 120ms ease, color 120ms ease;
+      }
+      #pal-mealkit-filter-bar .pal-mealkit-filter-switch-btn:last-child {
+        border-right: none !important;
+      }
+      #pal-mealkit-filter-bar .pal-mealkit-filter-switch-btn:hover {
+        background: #f8fafc !important;
+        color: #0f172a !important;
+      }
+      #pal-mealkit-filter-bar .pal-mealkit-filter-switch-btn.is-active {
+        background: #1570ef !important;
+        color: #ffffff !important;
+        box-shadow: none !important;
+      }
+      #pal-mealkit-filter-bar .pal-mealkit-filter-status {
+        color: #0f172a !important;
+        font-size: 13px;
+        font-weight: 500;
+        line-height: 1.45;
       }
       @media (prefers-color-scheme: dark) {
-        .pal-mealkit-filter-bar {
+        #pal-mealkit-filter-bar.pal-mealkit-filter-bar {
           background: #1f2631;
           border-color: #3a4655;
           box-shadow: 0 10px 24px rgba(0, 0, 0, 0.35);
         }
-        .pal-mealkit-filter-label {
-          color: #f2f4f7;
+        #pal-mealkit-filter-bar .pal-mealkit-filter-label {
+          color: #f8fafc !important;
         }
-        .pal-mealkit-filter-switch {
-          background: #2a3342;
-          border-color: #435066;
+        #pal-mealkit-filter-bar .pal-mealkit-filter-switch {
+          background: #1f2631 !important;
+          border-color: #667085 !important;
+          box-shadow: none;
         }
-        .pal-mealkit-filter-switch-btn {
-          color: #d0d5dd;
+        #pal-mealkit-filter-bar .pal-mealkit-filter-switch-btn {
+          background: #1f2631 !important;
+          color: #e2e8f0 !important;
+          border-right-color: #667085 !important;
         }
-        .pal-mealkit-filter-switch-btn:hover {
-          color: #f2f4f7;
+        #pal-mealkit-filter-bar .pal-mealkit-filter-switch-btn:hover {
+          background: #2a3342 !important;
+          color: #f8fafc !important;
         }
-        .pal-mealkit-filter-switch-btn.is-active {
-          background: #3a4a61;
-          color: #ffffff;
-          box-shadow: 0 3px 10px rgba(0, 0, 0, 0.35);
+        #pal-mealkit-filter-bar .pal-mealkit-filter-switch-btn.is-active {
+          background: #1570ef !important;
+          color: #ffffff !important;
+          box-shadow: none !important;
         }
-        .pal-mealkit-filter-status {
-          color: #c7d0dd;
+        #pal-mealkit-filter-bar .pal-mealkit-filter-status {
+          color: #e2e8f0 !important;
+        }
+        #pal-mealkit-filter-bar .pal-mealkit-filter-display-btn {
+          background: #1f2937 !important;
+          border-color: #475569 !important;
+          color: #f8fafc !important;
+        }
+        #pal-mealkit-filter-bar .pal-mealkit-filter-display-btn:hover {
+          background: #334155 !important;
+          border-color: #64748b !important;
+          color: #ffffff !important;
+        }
+        #pal-mealkit-filter-bar .pal-mealkit-filter-display-btn.is-active {
+          background: #1570ef !important;
+          border-color: #1570ef !important;
+          color: #ffffff !important;
         }
       }
       .pal-mealkit-highlight {
@@ -264,9 +355,81 @@
     status.className = "pal-mealkit-filter-status";
     status.textContent = latestStatusText;
 
-    bar.append(label, switchWrap, status);
+    const barLeft = document.createElement("div");
+    barLeft.className = "pal-mealkit-filter-bar-left";
+    barLeft.append(label, switchWrap, status);
+
+    const displayToggleBtn = document.createElement("button");
+    displayToggleBtn.type = "button";
+    displayToggleBtn.id = "pal-mealkit-display-toggle-btn";
+    displayToggleBtn.className = "pal-mealkit-filter-display-btn";
+    displayToggleBtn.textContent = "表示項目を減らす";
+    displayToggleBtn.setAttribute("aria-pressed", "false");
+
+    const trail = document.createElement("div");
+    trail.className = "pal-mealkit-filter-bar-trail";
+    trail.append(displayToggleBtn);
+
+    bar.append(barLeft, trail);
+
+    const section = mount.parentElement;
+    if (section) {
+      section.setAttribute("data-pal-mealkit-filter-host", "");
+    }
+
     mount.insertBefore(bar, mount.firstChild);
     syncModeButtons();
+    setupDisplayItemsToggle();
+  }
+
+  function syncDisplayToggleButtonFromCheckbox(checkbox) {
+    const displayBtn = document.getElementById("pal-mealkit-display-toggle-btn");
+    if (!displayBtn || !checkbox) {
+      return;
+    }
+    const on = checkbox.checked;
+    displayBtn.classList.toggle("is-active", on);
+    displayBtn.setAttribute("aria-pressed", on ? "true" : "false");
+  }
+
+  function setupDisplayItemsToggle() {
+    const section = findPrimaryMealKitSection();
+    const displayBtn = document.getElementById("pal-mealkit-display-toggle-btn");
+    if (!section || !displayBtn) {
+      return;
+    }
+
+    const checkbox = section.querySelector('.vue-items-display-setting input[type="checkbox"]');
+    if (!checkbox) {
+      setTimeout(setupDisplayItemsToggle, 400);
+      return;
+    }
+
+    if (section.dataset.palDisplayDelegate !== "1") {
+      section.dataset.palDisplayDelegate = "1";
+      section.addEventListener("change", (event) => {
+        const target = event.target;
+        if (
+          target &&
+          target.matches &&
+          target.matches('.vue-items-display-setting input[type="checkbox"]')
+        ) {
+          syncDisplayToggleButtonFromCheckbox(target);
+        }
+      });
+    }
+
+    if (displayBtn.dataset.palDisplayClickBound !== "1") {
+      displayBtn.dataset.palDisplayClickBound = "1";
+      displayBtn.addEventListener("click", () => {
+        const cb = section.querySelector('.vue-items-display-setting input[type="checkbox"]');
+        if (cb) {
+          cb.click();
+        }
+      });
+    }
+
+    syncDisplayToggleButtonFromCheckbox(checkbox);
   }
 
   function createModeButton(mode, text) {
@@ -384,6 +547,7 @@
     }
     reapplyTimer = setInterval(() => {
       injectControlBar();
+      setupDisplayItemsToggle();
       if (hasLoadedTitles) {
         applyModeToAllItems();
       }
