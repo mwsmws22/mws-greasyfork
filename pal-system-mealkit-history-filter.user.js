@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Pal System Meal Kit History Filter
 // @namespace    mwsmws22
-// @version      0.1.4
+// @version      0.1.6
 // @author       mwsmws22
 // @license      MIT
 // @description  Hide or highlight meal kits already tried, based on Paperless titles.
@@ -174,8 +174,56 @@
     document.head.appendChild(style);
   }
 
-  function getItemSectionInner() {
-    return document.querySelector(".item-section-body > .inner");
+  /**
+   * Main product grid lives under #pageNaviTopForContent or a non-slider .vue-items-section.
+   * A plain ".item-section-body > .inner" match is often the carousel block, not the grid.
+   */
+  function findPrimaryMealKitSection() {
+    const byId = document.getElementById("pageNaviTopForContent");
+    if (byId instanceof HTMLElement && byId.querySelector(":scope > .inner")) {
+      return byId;
+    }
+
+    const sections = document.querySelectorAll(".vue-items-section.ipal-format.item-section");
+    for (const section of sections) {
+      if (section.classList.contains("vue-slider-items")) {
+        continue;
+      }
+      if (section.querySelector(".item-section-body .vue-items.item-list")) {
+        return section;
+      }
+    }
+
+    const list = document.querySelector(".item-section-body .vue-items.item-list");
+    if (list) {
+      const section = list.closest(".vue-items-section.ipal-format.item-section");
+      if (section && !section.classList.contains("vue-slider-items")) {
+        return section;
+      }
+    }
+
+    return null;
+  }
+
+  function getControlBarMountElement() {
+    const section = findPrimaryMealKitSection();
+    if (!section) {
+      return null;
+    }
+    const inner = section.querySelector(":scope > .inner");
+    return inner instanceof HTMLElement ? inner : null;
+  }
+
+  function getMealKitListRoot() {
+    const section = findPrimaryMealKitSection();
+    if (section) {
+      const scoped = section.querySelector(".item-section-body .vue-items.item-list");
+      if (scoped) {
+        return scoped;
+      }
+    }
+    const fallback = document.querySelector(".item-section-body .vue-items.item-list");
+    return fallback instanceof HTMLElement ? fallback : null;
   }
 
   function injectControlBar() {
@@ -183,8 +231,8 @@
       return;
     }
 
-    const itemSectionInner = getItemSectionInner();
-    if (!itemSectionInner) {
+    const mount = getControlBarMountElement();
+    if (!mount) {
       setTimeout(injectControlBar, 500);
       return;
     }
@@ -217,7 +265,7 @@
     status.textContent = latestStatusText;
 
     bar.append(label, switchWrap, status);
-    itemSectionInner.insertBefore(bar, itemSectionInner.firstChild);
+    mount.insertBefore(bar, mount.firstChild);
     syncModeButtons();
   }
 
@@ -309,7 +357,7 @@
   }
 
   function startWatchingForListUpdates() {
-    const listRoot = document.querySelector(".item-section-body .vue-items.item-list");
+    const listRoot = getMealKitListRoot();
     if (!listRoot) {
       setTimeout(startWatchingForListUpdates, 1000);
       return;
@@ -359,7 +407,9 @@
   }
 
   function getMealKitItems() {
-    const allItems = document.querySelectorAll(".item-section-body .vue-item, .item-section-body .item-unit");
+    const section = findPrimaryMealKitSection();
+    const root = section || document;
+    const allItems = root.querySelectorAll(".item-section-body .vue-item, .item-section-body .item-unit");
     return Array.from(allItems).filter((item) => item.querySelector(".item-name .name a"));
   }
 
