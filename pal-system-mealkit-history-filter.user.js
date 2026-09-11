@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Pal System Meal Kit History Filter
 // @namespace    mwsmws22
-// @version      0.2.7
+// @version      0.2.8
 // @author       mwsmws22
 // @license      MIT
 // @description  Hide or highlight meal kits already tried, based on Paperless titles. Flags likely Paperless title typos (~1-3 edits off).
@@ -274,21 +274,29 @@
         background: #fff3a0 !important;
       }
       /*
-       * Inset ring via box-shadow (not outline): outline-offset left a gap and
-       * parent overflow often clipped the right edge of outline.
+       * Border (not outline/box-shadow): stays flush on all sides and is not
+       * clipped by overflow. flex-wrap + clear keep the footer under the card
+       * instead of beside a floated/flex image.
        */
       .pal-mealkit-typo-suspect {
-        box-shadow: inset 0 0 0 2px #d97706 !important;
-        position: relative;
+        border: 2px solid #d97706 !important;
+        box-sizing: border-box !important;
+        flex-wrap: wrap !important;
       }
       .pal-mealkit-typo-footer {
-        display: block;
-        box-sizing: border-box;
-        width: 100%;
-        margin: 0;
-        padding: 8px 10px;
-        border-top: 1px solid #c2410c;
-        background: #9a3412;
+        display: block !important;
+        clear: both !important;
+        float: none !important;
+        flex: 0 0 100% !important;
+        order: 9999 !important;
+        grid-column: 1 / -1 !important;
+        align-self: stretch !important;
+        box-sizing: border-box !important;
+        width: 100% !important;
+        max-width: 100% !important;
+        margin: 0 !important;
+        padding: 8px 10px !important;
+        background: #ea580c !important;
         color: #fff7ed !important;
         font-size: 11px;
         font-weight: 500;
@@ -299,18 +307,12 @@
       .pal-mealkit-typo-footer-label {
         display: block;
         font-weight: 700;
-        color: #fdba74 !important;
+        color: #fff7ed !important;
         margin-bottom: 2px;
       }
       .pal-mealkit-typo-footer-alt {
         display: block;
         color: #fff7ed !important;
-      }
-      .pal-mealkit-typo-footer-dist {
-        display: block;
-        margin-top: 2px;
-        color: #fcd34d !important;
-        font-size: 10px;
         font-weight: 600;
       }
     `;
@@ -876,21 +878,33 @@
 
     const label = document.createElement("span");
     label.className = "pal-mealkit-typo-footer-label";
-    label.textContent = "表記ゆれ疑い (Paperless)";
+    label.textContent = "Possible match:";
 
     const alt = document.createElement("span");
     alt.className = "pal-mealkit-typo-footer-alt";
     alt.textContent = matchInfo.nearTitle;
 
-    const dist = document.createElement("span");
-    dist.className = "pal-mealkit-typo-footer-dist";
-    dist.textContent = `編集距離 ${matchInfo.distance}`;
-
-    footer.append(label, alt, dist);
+    footer.append(label, alt);
   }
 
-  /** Always last child of the card cell so the alt title sits at the bottom. */
+  /**
+   * Place footer after cart/actions when present so it sits at the visual
+   * bottom of the card; otherwise append as the card's last child.
+   */
   function appendTypoFooter(itemNode, footer) {
+    const cart =
+      itemNode.querySelector(".item-cart") ||
+      itemNode.querySelector(".cart-btn") ||
+      itemNode.querySelector("[class*='cart']") ||
+      itemNode.querySelector("button");
+    if (cart) {
+      const row = cart.closest(".item-action, .item-bottom, .controller, .btn-area") || cart.parentElement;
+      if (row && itemNode.contains(row) && row !== itemNode) {
+        row.insertAdjacentElement("afterend", footer);
+        return;
+      }
+    }
+
     itemNode.appendChild(footer);
   }
 
