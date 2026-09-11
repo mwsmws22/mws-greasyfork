@@ -862,6 +862,12 @@
       `Paperless表記ゆれ疑い (距離${matchInfo.distance}): ${matchInfo.nearTitle}`
     );
 
+    // If the card is a horizontal flex row, wrapping pushes the footer under the image.
+    const display = window.getComputedStyle(itemNode).display;
+    if (display === "flex" || display === "inline-flex") {
+      itemNode.style.flexWrap = "wrap";
+    }
+
     if (itemNode.querySelector(".pal-mealkit-typo-footer")) {
       updateTypoFooter(itemNode.querySelector(".pal-mealkit-typo-footer"), matchInfo);
       return;
@@ -912,6 +918,9 @@
     itemNode.classList.remove("pal-mealkit-typo-suspect");
     itemNode.removeAttribute(TYPO_ATTR);
     itemNode.removeAttribute(TYPO_HINT_ATTR);
+    if (itemNode.style.flexWrap === "wrap") {
+      itemNode.style.flexWrap = "";
+    }
     if (itemNode.getAttribute("title") && itemNode.getAttribute("title").startsWith("Paperless表記ゆれ疑い")) {
       itemNode.removeAttribute("title");
     }
