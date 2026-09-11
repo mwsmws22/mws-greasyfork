@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Pal System Meal Kit History Filter
 // @namespace    mwsmws22
-// @version      0.2.6
+// @version      0.2.7
 // @author       mwsmws22
 // @license      MIT
 // @description  Hide or highlight meal kits already tried, based on Paperless titles. Flags likely Paperless title typos (~1-3 edits off).
@@ -273,27 +273,45 @@
       .pal-mealkit-highlight {
         background: #fff3a0 !important;
       }
-      /* Near-match / likely Paperless typo — distinct from exact-match yellow. */
+      /*
+       * Inset ring via box-shadow (not outline): outline-offset left a gap and
+       * parent overflow often clipped the right edge of outline.
+       */
       .pal-mealkit-typo-suspect {
-        outline: 2px solid #d97706 !important;
-        outline-offset: 2px;
-        background: #fff7ed !important;
+        box-shadow: inset 0 0 0 2px #d97706 !important;
+        position: relative;
       }
-      .pal-mealkit-typo-suspect.pal-mealkit-highlight {
-        background: linear-gradient(180deg, #fff3a0 0%, #ffedd5 100%) !important;
-      }
-      .pal-mealkit-typo-badge {
-        display: inline-block;
-        margin-left: 6px;
-        padding: 1px 6px;
-        border-radius: 4px;
-        background: #d97706;
-        color: #ffffff;
+      .pal-mealkit-typo-footer {
+        display: block;
+        box-sizing: border-box;
+        width: 100%;
+        margin: 0;
+        padding: 8px 10px;
+        border-top: 1px solid #c2410c;
+        background: #9a3412;
+        color: #fff7ed !important;
         font-size: 11px;
+        font-weight: 500;
+        line-height: 1.45;
+        text-align: left;
+        word-break: break-word;
+      }
+      .pal-mealkit-typo-footer-label {
+        display: block;
         font-weight: 700;
-        line-height: 1.4;
-        vertical-align: middle;
-        white-space: nowrap;
+        color: #fdba74 !important;
+        margin-bottom: 2px;
+      }
+      .pal-mealkit-typo-footer-alt {
+        display: block;
+        color: #fff7ed !important;
+      }
+      .pal-mealkit-typo-footer-dist {
+        display: block;
+        margin-top: 2px;
+        color: #fcd34d !important;
+        font-size: 10px;
+        font-weight: 600;
       }
     `;
     document.head.appendChild(style);
@@ -841,18 +859,39 @@
       TYPO_HINT_ATTR,
       `Paperless表記ゆれ疑い (距離${matchInfo.distance}): ${matchInfo.nearTitle}`
     );
-    itemNode.title = `Paperless表記ゆれ疑い (編集距離 ${matchInfo.distance}): 「${matchInfo.nearTitle}」`;
 
-    const nameWrap = itemNode.querySelector(".item-name .name");
-    if (!nameWrap || nameWrap.querySelector(".pal-mealkit-typo-badge")) {
+    if (itemNode.querySelector(".pal-mealkit-typo-footer")) {
+      updateTypoFooter(itemNode.querySelector(".pal-mealkit-typo-footer"), matchInfo);
       return;
     }
 
-    const badge = document.createElement("span");
-    badge.className = "pal-mealkit-typo-badge";
-    badge.textContent = "表記ゆれ?";
-    badge.title = itemNode.title;
-    nameWrap.appendChild(badge);
+    const footer = document.createElement("div");
+    footer.className = "pal-mealkit-typo-footer";
+    updateTypoFooter(footer, matchInfo);
+    appendTypoFooter(itemNode, footer);
+  }
+
+  function updateTypoFooter(footer, matchInfo) {
+    footer.replaceChildren();
+
+    const label = document.createElement("span");
+    label.className = "pal-mealkit-typo-footer-label";
+    label.textContent = "表記ゆれ疑い (Paperless)";
+
+    const alt = document.createElement("span");
+    alt.className = "pal-mealkit-typo-footer-alt";
+    alt.textContent = matchInfo.nearTitle;
+
+    const dist = document.createElement("span");
+    dist.className = "pal-mealkit-typo-footer-dist";
+    dist.textContent = `編集距離 ${matchInfo.distance}`;
+
+    footer.append(label, alt, dist);
+  }
+
+  /** Always last child of the card cell so the alt title sits at the bottom. */
+  function appendTypoFooter(itemNode, footer) {
+    itemNode.appendChild(footer);
   }
 
   function clearTypoFlag(itemNode) {
@@ -862,7 +901,7 @@
     if (itemNode.getAttribute("title") && itemNode.getAttribute("title").startsWith("Paperless表記ゆれ疑い")) {
       itemNode.removeAttribute("title");
     }
-    itemNode.querySelectorAll(".pal-mealkit-typo-badge").forEach((el) => el.remove());
+    itemNode.querySelectorAll(".pal-mealkit-typo-badge, .pal-mealkit-typo-footer").forEach((el) => el.remove());
   }
 
   run();
