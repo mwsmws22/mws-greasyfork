@@ -36,9 +36,10 @@ Tampermonkey script for Pal System meal kit pages. It checks your Paperless docu
 
 - Fetches tried meal-kit titles from Paperless (`document_type=22`, `tag=125`)
 - Matches Paperless titles to the Pal System item grid by normalized title
+- Flags likely Paperless title typos when a page title is ~1–3 character edits away from a Paperless title (orange outline + `表記ゆれ?` badge; hover shows the Paperless title)
 - Injects a top control with 3 modes:
   - `Highlight` (default): matched items get yellow background
   - `Hide`: matched items are hidden
-  - `Off`: no changes to listing cards
+  - `Off`: no changes to listing cards (typo flags still shown)
 - Persists selected mode in `localStorage`
 - Reapplies automatically when the page updates dynamically

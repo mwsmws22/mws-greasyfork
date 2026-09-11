@@ -1,10 +1,10 @@
 // ==UserScript==
 // @name         Pal System Meal Kit History Filter
 // @namespace    mwsmws22
-// @version      0.2.5
+// @version      0.2.6
 // @author       mwsmws22
 // @license      MIT
-// @description  Hide or highlight meal kits already tried, based on Paperless titles.
+// @description  Hide or highlight meal kits already tried, based on Paperless titles. Flags likely Paperless title typos (~1-3 edits off).
 // @match        https://shop.pal-system.co.jp/pal/InesOrderContents.do?contentsId=A900001*
 // @run-at       document-idle
 // @grant        GM_xmlhttpRequest
@@ -29,18 +29,29 @@
   };
 
   const MARK_ATTR = "data-pal-mealkit-filter-marked";
+  const TYPO_ATTR = "data-pal-mealkit-typo-suspect";
+  const TYPO_HINT_ATTR = "data-pal-mealkit-typo-hint";
   const ORIGINAL_STYLE_ATTR = "data-pal-mealkit-filter-original-style";
   const TITLE_SUFFIX_REGEX = /\s*\d+\s*セット\s*$/;
   /** Apply these patterns to both PAL and Paperless titles before comparison. */
   const TITLE_NOISE_PATTERNS = [/【冷凍】/g, /\([^)]*人分\s*\)/g];
+  /** Levenshtein distance range that counts as a likely Paperless typo (not an exact match). */
+  const TYPO_DISTANCE_MIN = 1;
+  const TYPO_DISTANCE_MAX = 3;
+  /** Skip fuzzy compare when either side is shorter than this (avoids noise on tiny strings). */
+  const TYPO_MIN_TITLE_LENGTH = 4;
   const REAPPLY_INTERVAL_MS = 1200;
 
   let triedTitles = new Set();
+  /** Normalized Paperless titles kept as a list for near-match (typo) scanning. */
+  let triedTitleList = [];
   let currentMode = loadMode();
   let observer = null;
   let hasLoadedTitles = false;
   let reapplyTimer = null;
   let latestStatusText = "Paperless読み込み中...";
+  /** True while we mutate the list (e.g. typo badges) so MutationObserver does not re-enter. */
+  let isApplyingMode = false;
 
   function log(...args) {
     if (!DEBUG) {
@@ -55,6 +66,7 @@
     log("run start", { url: location.href, mode: currentMode });
     fetchTriedTitlesWithRetry(FETCH_RETRY_COUNT)
       .then((titles) => {
+        triedTitleList = Array.from(titles);
         triedTitles = titles;
         hasLoadedTitles = true;
         log("paperless loaded", { titleCount: titles.size });
@@ -260,6 +272,28 @@
       }
       .pal-mealkit-highlight {
         background: #fff3a0 !important;
+      }
+      /* Near-match / likely Paperless typo — distinct from exact-match yellow. */
+      .pal-mealkit-typo-suspect {
+        outline: 2px solid #d97706 !important;
+        outline-offset: 2px;
+        background: #fff7ed !important;
+      }
+      .pal-mealkit-typo-suspect.pal-mealkit-highlight {
+        background: linear-gradient(180deg, #fff3a0 0%, #ffedd5 100%) !important;
+      }
+      .pal-mealkit-typo-badge {
+        display: inline-block;
+        margin-left: 6px;
+        padding: 1px 6px;
+        border-radius: 4px;
+        background: #d97706;
+        color: #ffffff;
+        font-size: 11px;
+        font-weight: 700;
+        line-height: 1.4;
+        vertical-align: middle;
+        white-space: nowrap;
       }
     `;
     document.head.appendChild(style);
@@ -531,6 +565,9 @@
     }
 
     observer = new MutationObserver(() => {
+      if (isApplyingMode) {
+        return;
+      }
       log("mutation observed");
       applyModeToAllItems();
     });
@@ -555,19 +592,42 @@
   }
 
   function applyModeToAllItems() {
-    const itemNodes = getMealKitItems();
-    let matchedCount = 0;
+    if (isApplyingMode) {
+      return;
+    }
 
-    itemNodes.forEach((item) => {
-      const matched = doesItemMatchTriedTitle(item);
-      if (matched) {
-        matchedCount += 1;
+    isApplyingMode = true;
+    try {
+      const itemNodes = getMealKitItems();
+      let matchedCount = 0;
+      let typoCount = 0;
+
+      itemNodes.forEach((item) => {
+        const matchInfo = inspectItemAgainstTriedTitles(item);
+        if (matchInfo.exact) {
+          matchedCount += 1;
+        }
+        if (matchInfo.typo) {
+          typoCount += 1;
+        }
+        applyModeToItem(item, matchInfo);
+      });
+
+      const typoPart = typoCount > 0 ? ` / 表記ゆれ疑い: ${typoCount}件` : "";
+      updateStatus(`一致: ${matchedCount}件${typoPart} / 表示: ${itemNodes.length}件`);
+      log("applied", {
+        mode: currentMode,
+        matchedCount,
+        typoCount,
+        total: itemNodes.length,
+      });
+    } finally {
+      // Drop mutations we caused (badge insert/remove) before allowing the observer again.
+      if (observer) {
+        observer.takeRecords();
       }
-      applyModeToItem(item, matched);
-    });
-
-    updateStatus(`一致: ${matchedCount}件 / 表示: ${itemNodes.length}件`);
-    log("applied", { mode: currentMode, matchedCount, total: itemNodes.length });
+      isApplyingMode = false;
+    }
   }
 
   function getMealKitItems() {
@@ -577,15 +637,145 @@
     return Array.from(allItems).filter((item) => item.querySelector(".item-name .name a"));
   }
 
-  function doesItemMatchTriedTitle(itemNode) {
+  /**
+   * Compare one PAL card against Paperless titles.
+   * Exact match → hide/highlight. Near match (edit distance 1–3) → typo flag.
+   */
+  function inspectItemAgainstTriedTitles(itemNode) {
+    const empty = { exact: false, typo: false, nearTitle: null, distance: 0 };
     const anchor = itemNode.querySelector(".item-name .name a");
     if (!anchor) {
-      return false;
+      return empty;
     }
 
-    const rawName = (anchor.textContent || "").trim();
+    // Badge text lives inside .name; strip it so re-reads stay stable.
+    const rawName = getMealKitAnchorRawName(anchor);
     const normalizedName = normalizeMealKitName(rawName);
-    return triedTitles.has(normalizedName);
+    if (!normalizedName) {
+      return empty;
+    }
+
+    if (triedTitles.has(normalizedName)) {
+      return { exact: true, typo: false, nearTitle: null, distance: 0 };
+    }
+
+    const near = findClosestNearTitle(normalizedName, triedTitleList);
+    if (!near) {
+      return empty;
+    }
+
+    return {
+      exact: false,
+      typo: true,
+      nearTitle: near.title,
+      distance: near.distance,
+    };
+  }
+
+  function getMealKitAnchorRawName(anchor) {
+    const clone = anchor.cloneNode(true);
+    clone.querySelectorAll(".pal-mealkit-typo-badge").forEach((el) => el.remove());
+    return (clone.textContent || "").trim();
+  }
+
+  /**
+   * Smallest edit distance in [TYPO_DISTANCE_MIN, TYPO_DISTANCE_MAX].
+   * Length prefilter skips pairs that cannot fall in that band.
+   */
+  function findClosestNearTitle(pageTitle, paperlessTitles) {
+    if (
+      !pageTitle ||
+      pageTitle.length < TYPO_MIN_TITLE_LENGTH ||
+      !Array.isArray(paperlessTitles) ||
+      paperlessTitles.length === 0
+    ) {
+      return null;
+    }
+
+    let best = null;
+
+    for (const paperlessTitle of paperlessTitles) {
+      if (!paperlessTitle || paperlessTitle === pageTitle) {
+        continue;
+      }
+      if (paperlessTitle.length < TYPO_MIN_TITLE_LENGTH) {
+        continue;
+      }
+
+      const lengthDelta = Math.abs(paperlessTitle.length - pageTitle.length);
+      if (lengthDelta > TYPO_DISTANCE_MAX) {
+        continue;
+      }
+
+      const distance = levenshteinDistance(pageTitle, paperlessTitle, TYPO_DISTANCE_MAX);
+      if (distance < TYPO_DISTANCE_MIN || distance > TYPO_DISTANCE_MAX) {
+        continue;
+      }
+
+      if (!best || distance < best.distance) {
+        best = { title: paperlessTitle, distance };
+        if (distance === TYPO_DISTANCE_MIN) {
+          break;
+        }
+      }
+    }
+
+    return best;
+  }
+
+  /**
+   * Classic Levenshtein with early exit when distance must exceed `maxDistance`.
+   * Returns maxDistance + 1 when the true distance is larger than maxDistance.
+   */
+  function levenshteinDistance(a, b, maxDistance) {
+    if (a === b) {
+      return 0;
+    }
+
+    const aLen = a.length;
+    const bLen = b.length;
+    if (Math.abs(aLen - bLen) > maxDistance) {
+      return maxDistance + 1;
+    }
+
+    // Ensure b is the shorter string so the rolling row stays small.
+    if (aLen < bLen) {
+      return levenshteinDistance(b, a, maxDistance);
+    }
+
+    let prev = new Array(bLen + 1);
+    let curr = new Array(bLen + 1);
+    for (let j = 0; j <= bLen; j += 1) {
+      prev[j] = j;
+    }
+
+    for (let i = 1; i <= aLen; i += 1) {
+      curr[0] = i;
+      let rowMin = curr[0];
+      const aChar = a.charAt(i - 1);
+
+      for (let j = 1; j <= bLen; j += 1) {
+        const cost = aChar === b.charAt(j - 1) ? 0 : 1;
+        const del = prev[j] + 1;
+        const ins = curr[j - 1] + 1;
+        const sub = prev[j - 1] + cost;
+        const value = Math.min(del, ins, sub);
+        curr[j] = value;
+        if (value < rowMin) {
+          rowMin = value;
+        }
+      }
+
+      if (rowMin > maxDistance) {
+        return maxDistance + 1;
+      }
+
+      const swap = prev;
+      prev = curr;
+      curr = swap;
+    }
+
+    return prev[bLen];
   }
 
   /** NFKC folds full-width digits (e.g. １ vs 1) so page text matches Paperless titles. */
@@ -614,16 +804,21 @@
     return cleaned.endsWith("セット") ? cleaned : `${cleaned}セット`;
   }
 
-  function applyModeToItem(itemNode, isMatch) {
+  function applyModeToItem(itemNode, matchInfo) {
     if (!itemNode.hasAttribute(ORIGINAL_STYLE_ATTR)) {
       itemNode.setAttribute(ORIGINAL_STYLE_ATTR, itemNode.getAttribute("style") || "");
     }
 
+    clearTypoFlag(itemNode);
     itemNode.classList.remove("pal-mealkit-highlight");
     itemNode.style.display = "";
     itemNode.removeAttribute(MARK_ATTR);
 
-    if (!isMatch || currentMode === MODES.OFF) {
+    if (matchInfo.typo) {
+      applyTypoFlag(itemNode, matchInfo);
+    }
+
+    if (!matchInfo.exact || currentMode === MODES.OFF) {
       return;
     }
 
@@ -637,6 +832,37 @@
     if (currentMode === MODES.HIGHLIGHT) {
       itemNode.classList.add("pal-mealkit-highlight");
     }
+  }
+
+  function applyTypoFlag(itemNode, matchInfo) {
+    itemNode.classList.add("pal-mealkit-typo-suspect");
+    itemNode.setAttribute(TYPO_ATTR, "1");
+    itemNode.setAttribute(
+      TYPO_HINT_ATTR,
+      `Paperless表記ゆれ疑い (距離${matchInfo.distance}): ${matchInfo.nearTitle}`
+    );
+    itemNode.title = `Paperless表記ゆれ疑い (編集距離 ${matchInfo.distance}): 「${matchInfo.nearTitle}」`;
+
+    const nameWrap = itemNode.querySelector(".item-name .name");
+    if (!nameWrap || nameWrap.querySelector(".pal-mealkit-typo-badge")) {
+      return;
+    }
+
+    const badge = document.createElement("span");
+    badge.className = "pal-mealkit-typo-badge";
+    badge.textContent = "表記ゆれ?";
+    badge.title = itemNode.title;
+    nameWrap.appendChild(badge);
+  }
+
+  function clearTypoFlag(itemNode) {
+    itemNode.classList.remove("pal-mealkit-typo-suspect");
+    itemNode.removeAttribute(TYPO_ATTR);
+    itemNode.removeAttribute(TYPO_HINT_ATTR);
+    if (itemNode.getAttribute("title") && itemNode.getAttribute("title").startsWith("Paperless表記ゆれ疑い")) {
+      itemNode.removeAttribute("title");
+    }
+    itemNode.querySelectorAll(".pal-mealkit-typo-badge").forEach((el) => el.remove());
   }
 
   run();
