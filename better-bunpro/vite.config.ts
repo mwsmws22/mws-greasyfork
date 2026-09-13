@@ -14,7 +14,7 @@ export default defineConfig({
         author: 'mwsmws22',
         license: 'MIT',
         description:
-          'Quality-of-life tweaks for Bunpro reviews. Shows an example sentence for vocab that Bunpro reviews without one.',
+          'Features I wish Bunpro had. Show example sentences for A1+ vocab after a correct answer, and more.',
         // Bunpro routes client-side, so /reviews is often reached without a page
         // load. Every feature activates off the elements it needs being present.
         match: ['https://bunpro.jp/*'],

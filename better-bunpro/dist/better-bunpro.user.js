@@ -1,9 +1,9 @@
 // ==UserScript==
 // @name         Better Bunpro
 // @namespace    mwsmws22
-// @version      0.1.0
+// @version      0.1.1
 // @author       mwsmws22
-// @description  Quality-of-life tweaks for Bunpro reviews. Shows an example sentence for vocab that Bunpro reviews without one.
+// @description  Features I wish Bunpro had. Show example sentences for A1+ vocab after a correct answer, and more.
 // @license      MIT
 // @match        https://bunpro.jp/*
 // @grant        GM_getValue
