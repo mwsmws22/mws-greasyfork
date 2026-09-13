@@ -1,15 +1,5 @@
-import type { QuizState, ReviewableRef } from '../bunpro/quiz-state';
-
-/** Rotation is stored per term, independently of the session it was seen in. */
-export function termKey(term: ReviewableRef): string {
-  return `${term.type}:${term.id}`;
-}
-
-/** The same term in a later session is a different review, and gets a new sentence. */
-export function reviewKey(state: QuizState): string | null {
-  const { reviewable, sessionId } = state;
-  return reviewable && sessionId ? `${termKey(reviewable)}@${sessionId}` : null;
-}
+import type { QuizState } from '../bunpro/quiz-state';
+import { reviewKey } from '../bunpro/review';
 
 /**
  * A sentence is only ever on screen once the answer has been revealed as

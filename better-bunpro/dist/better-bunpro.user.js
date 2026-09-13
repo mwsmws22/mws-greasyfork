@@ -1,9 +1,9 @@
 // ==UserScript==
 // @name         Better Bunpro
 // @namespace    mwsmws22
-// @version      0.2.1
+// @version      0.3.0
 // @author       mwsmws22
-// @description  Features I wish Bunpro had. Show example sentences for A1+ vocab after a correct answer, cycle sentences with Tab, and more.
+// @description  Features I wish Bunpro had. Show example sentences for A1+ vocab after a correct answer, cycle sentences with Tab, keep guessing after a wrong answer, and more.
 // @license      MIT
 // @match        https://bunpro.jp/*
 // @grant        GM_getValue
@@ -87,6 +87,12 @@
 		const id = Number(card.id.slice(15));
 		return Number.isFinite(id) ? id : null;
 	}
+	function findAnswerInput() {
+		return document.querySelector("#js-manual-input");
+	}
+	function findSubmitButton() {
+		return document.querySelector(".InputManual__button");
+	}
 	function findQuizToolbar() {
 		const rows = document.querySelectorAll(`${QUIZ_ARTICLE} > header ul`);
 		for (const row of rows) if (row.querySelector("button, a")) return row;
@@ -97,6 +103,9 @@
 		sessionId: null,
 		reviewable: null,
 		questionMode: null,
+		inputMode: null,
+		answers: [],
+		isPostAttempt: false,
 		isRevealing: false,
 		isCorrect: false
 	};
@@ -107,6 +116,9 @@
 			sessionId: element.getAttribute("data-meta-session-id"),
 			reviewable: parseReviewable(element.getAttribute("data-meta-info")),
 			questionMode: element.getAttribute("data-meta-question-mode"),
+			inputMode: element.getAttribute("data-meta-input-mode"),
+			answers: parseAnswers(element.getAttribute("data-meta-answers-array")),
+			isPostAttempt: element.getAttribute("data-meta-is-post-attempt") === "true",
 			isRevealing: element.getAttribute("data-meta-is-revealing") === "true",
 			isCorrect: element.getAttribute("data-meta-is-correct") === "true"
 		};
@@ -144,6 +156,16 @@
 			attributeObserver?.disconnect();
 		};
 	}
+	function parseAnswers(raw) {
+		if (!raw || raw === "null") return [];
+		try {
+			const parsed = JSON.parse(raw);
+			if (!Array.isArray(parsed)) return [];
+			return parsed.filter((answer) => typeof answer === "string");
+		} catch {
+			return [];
+		}
+	}
 	function parseReviewable(raw) {
 		if (!raw || raw === "null") return null;
 		try {
@@ -156,6 +178,13 @@
 		} catch {
 			return null;
 		}
+	}
+	function termKey(term) {
+		return `${term.type}:${term.id}`;
+	}
+	function reviewKey(state) {
+		const { reviewable, sessionId } = state;
+		return reviewable && sessionId ? `${termKey(reviewable)}@${sessionId}` : null;
 	}
 	var API_BASE = "https://api.bunpro.jp/api/frontend";
 	var TOKEN_COOKIE = "frontend_api_token";
@@ -223,13 +252,6 @@
 			return [];
 		}
 	}
-	function termKey(term) {
-		return `${term.type}:${term.id}`;
-	}
-	function reviewKey(state) {
-		const { reviewable, sessionId } = state;
-		return reviewable && sessionId ? `${termKey(reviewable)}@${sessionId}` : null;
-	}
 	function solvedReviewKey(state) {
 		return state.isRevealing && state.isCorrect ? reviewKey(state) : null;
 	}
@@ -251,6 +273,10 @@
 	var KANJI = `${String.raw`\u2E80-\u2E99\u2E9B-\u2EF3\u2F00-\u2FD5`}${String.raw`\u3005\u3007\u3021-\u3029\u3038-\u303B`}${String.raw`\u3400-\u4DBF\u4E00-\u9FFF`}${String.raw`\uF900-\uFA6D\uFA70-\uFAD9`}`;
 	var HIRAGANA = String.raw`\u3041-\u3096\u309D-\u309F`;
 	var JAPANESE = `${KANJI}${HIRAGANA}${String.raw`\u30A0-\u30FF\u30FC`}`;
+	var JAPANESE_CHARACTER = new RegExp(`^[${JAPANESE}]$`);
+	function isJapanese(character) {
+		return JAPANESE_CHARACTER.test(character);
+	}
 	var ANNOTATABLE = `${KANJI}\\u30F6`;
 	var FULL_WIDTH_DIGITS = String.raw`\uFF10-\uFF19`;
 	var FULL_WIDTH_ALNUM = String.raw`\uFF21-\uFF3A\uFF41-\uFF5A${FULL_WIDTH_DIGITS}`;
@@ -543,6 +569,16 @@
 .bb-feature-desc {
   margin-top: 0.5rem;
 }
+.bb-wrong-guess {
+  animation: bb-shake 320ms ease;
+}
+@keyframes bb-shake {
+  0%, 100% { transform: translateX(0); }
+  20% { transform: translateX(-0.375rem); }
+  40% { transform: translateX(0.375rem); }
+  60% { transform: translateX(-0.25rem); }
+  80% { transform: translateX(0.125rem); }
+}
 `;
 	function injectStyles() {
 		if (document.getElementById(STYLE_ID)) return;
@@ -614,46 +650,7 @@
 			index: pickSentenceIndex(termKey(term), sessionId, sentences.length)
 		});
 	}
-	function bunproSentenceIndex(sentences) {
-		const shownId = nativeSentenceId();
-		if (shownId !== null) {
-			const found = sentences.findIndex((sentence) => sentence.id === shownId);
-			if (found !== -1) return found;
-		}
-		const rendered = findClozeSentence()?.textContent;
-		if (rendered) {
-			const found = indexOfRenderedSentence(rendered, sentences.map(partsTextOf));
-			if (found !== -1) return found;
-		}
-		return 0;
-	}
-	function indexOfRenderedSentence(rendered, candidates) {
-		const shown = withoutSpaces(rendered);
-		return candidates.findIndex((parts) => {
-			const pieces = parts.map(withoutSpaces).filter((piece) => piece !== "");
-			return pieces.length > 0 && appearInOrder(shown, pieces);
-		});
-	}
-	function appearInOrder(shown, pieces) {
-		let searchFrom = 0;
-		for (const piece of pieces) {
-			const at = shown.indexOf(piece, searchFrom);
-			if (at === -1) return false;
-			searchFrom = at + piece.length;
-		}
-		return true;
-	}
-	function withoutSpaces(text) {
-		return text.replace(/\s+/g, "");
-	}
-	function partsTextOf(sentence) {
-		const holder = document.createElement("div");
-		return questionSentenceParts(sentence).map((part) => {
-			holder.innerHTML = part;
-			return holder.textContent ?? "";
-		});
-	}
-	var version = "0.2.1";
+	var version = "0.3.0";
 	var PANEL_ID = "bb-settings-panel";
 	var CARD_CLASS = "bb-panel-card relative z-1 flex flex-col overflow-hidden rounded-normal border border-rim bg-secondary-bg text-primary-fg shadow-normal";
 	var CLOSE_SHAPES = "<path d=\"M6 6 18 18M18 6 6 18\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\"/>";
@@ -750,6 +747,169 @@
 		});
 		paint();
 		return button;
+	}
+	var SHAKE_CLASS = "bb-wrong-guess";
+	var BUNPRO_INCORRECT_CLASS = "text-incorrect";
+	var WATCHED_ATTRIBUTE = "bbFlashing";
+	function flashWrongGuess() {
+		const input = findAnswerInput();
+		if (!input) return;
+		clearFlash(input);
+		input.offsetWidth;
+		watchForFlashEnd(input);
+		input.classList.add(SHAKE_CLASS, BUNPRO_INCORRECT_CLASS);
+	}
+	function clearFlash(input) {
+		input.classList.remove(SHAKE_CLASS, BUNPRO_INCORRECT_CLASS);
+	}
+	function watchForFlashEnd(input) {
+		if (input.dataset[WATCHED_ATTRIBUTE]) return;
+		input.dataset[WATCHED_ATTRIBUTE] = "true";
+		input.addEventListener("animationend", () => clearFlash(input));
+	}
+	var TRANSLATION_SIMILARITY = .8;
+	var LATIN_LETTER = /[a-z]/i;
+	function gradeAnswer(questionMode, answers, typed) {
+		const guess = typed.trim();
+		if (guess === "" || answers.length === 0) return "unknown";
+		if (questionMode === "translate") return gradedBySimilarity(answers, guess);
+		if (questionMode === "reading") return gradedExactly(answers, guess);
+		return "unknown";
+	}
+	function gradedBySimilarity(answers, guess) {
+		return Math.max(...answers.map((answer) => similarity(normalize(answer), normalize(guess)))) >= TRANSLATION_SIMILARITY ? "accepted" : "rejected";
+	}
+	function gradedExactly(answers, guess) {
+		if (LATIN_LETTER.test(guess)) return "unknown";
+		return answers.some((answer) => normalize(answer) === normalize(guess)) ? "accepted" : "rejected";
+	}
+	function similarity(left, right) {
+		if (left.length === 0) return right.length === 0 ? 1 : 0;
+		if (right.length === 0) return 0;
+		return 1 - distance(left, right) / Math.max(left.length, right.length);
+	}
+	function distance(left, right) {
+		const target = [...right];
+		let row = target.map((_, column) => column + 1);
+		[...left].forEach((source, sourceIndex) => {
+			let diagonal = sourceIndex;
+			let previous = sourceIndex + 1;
+			row = row.map((above, column) => {
+				const cell = Math.min(diagonal + (source === target[column] ? 0 : 1), above + 1, previous + 1);
+				diagonal = above;
+				previous = cell;
+				return cell;
+			});
+		});
+		return row[target.length - 1] ?? left.length;
+	}
+	var LIGATURES = {
+		æ: "ae",
+		œ: "oe",
+		ß: "ss"
+	};
+	function normalize(text) {
+		return [...text.toLowerCase()].map(foldLetter).join("").trim();
+	}
+	function foldLetter(letter) {
+		if (isJapanese(letter)) return letter;
+		return (LIGATURES[letter] ?? letter).normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+	}
+	var SUBMIT_KEY = "Enter";
+	var lastRejected = null;
+	var keepGuessingFeature = {
+		id: "keep-guessing",
+		title: "Keep guessing after a wrong answer",
+		description: "On a review you type an English translation or a reading into, Bunpro reveals the answer the moment you get it wrong. With this on, a wrong answer is not submitted at all: your text stays in the box so you can try again. To give up and see the answer, either clear the box and press Enter, or press Enter again on the same wrong answer. Because a guess this catches never reaches Bunpro, the review is graded on the answer you finally submit.",
+		enabledByDefault: true,
+		start() {
+			injectStyles();
+			window.addEventListener("keydown", onKeyDown$1, true);
+			window.addEventListener("click", onClick, true);
+		},
+		stop() {
+			window.removeEventListener("keydown", onKeyDown$1, true);
+			window.removeEventListener("click", onClick, true);
+			lastRejected = null;
+		}
+	};
+	function onKeyDown$1(event) {
+		if (event.key !== SUBMIT_KEY || event.repeat || hasModifier$1(event) || isSettingsPanelOpen()) return;
+		swallowIfWrong(event);
+	}
+	function onClick(event) {
+		const target = event.target;
+		if (!(target instanceof Node) || findSubmitButton()?.contains(target) !== true) return;
+		swallowIfWrong(event);
+	}
+	function swallowIfWrong(event) {
+		if (!isWrongGuess()) return;
+		event.preventDefault();
+		event.stopPropagation();
+		flashWrongGuess();
+	}
+	function isWrongGuess() {
+		const input = findAnswerInput();
+		const state = readQuizState();
+		if (!input || !isAwaitingTypedAnswer(state)) return false;
+		const review = reviewKey(state);
+		if (!review) return false;
+		const guess = input.value.trim();
+		if (lastRejected?.reviewKey === review && lastRejected.guess === guess) {
+			lastRejected = null;
+			return false;
+		}
+		if (gradeAnswer(state.questionMode, state.answers, guess) !== "rejected") return false;
+		lastRejected = {
+			reviewKey: review,
+			guess
+		};
+		return true;
+	}
+	function isAwaitingTypedAnswer(state) {
+		return state.inputMode === "manual" && !state.isPostAttempt && !state.isRevealing;
+	}
+	function hasModifier$1(event) {
+		return event.altKey || event.ctrlKey || event.metaKey || event.shiftKey;
+	}
+	function bunproSentenceIndex(sentences) {
+		const shownId = nativeSentenceId();
+		if (shownId !== null) {
+			const found = sentences.findIndex((sentence) => sentence.id === shownId);
+			if (found !== -1) return found;
+		}
+		const rendered = findClozeSentence()?.textContent;
+		if (rendered) {
+			const found = indexOfRenderedSentence(rendered, sentences.map(partsTextOf));
+			if (found !== -1) return found;
+		}
+		return 0;
+	}
+	function indexOfRenderedSentence(rendered, candidates) {
+		const shown = withoutSpaces(rendered);
+		return candidates.findIndex((parts) => {
+			const pieces = parts.map(withoutSpaces).filter((piece) => piece !== "");
+			return pieces.length > 0 && appearInOrder(shown, pieces);
+		});
+	}
+	function appearInOrder(shown, pieces) {
+		let searchFrom = 0;
+		for (const piece of pieces) {
+			const at = shown.indexOf(piece, searchFrom);
+			if (at === -1) return false;
+			searchFrom = at + piece.length;
+		}
+		return true;
+	}
+	function withoutSpaces(text) {
+		return text.replace(/\s+/g, "");
+	}
+	function partsTextOf(sentence) {
+		const holder = document.createElement("div");
+		return questionSentenceParts(sentence).map((part) => {
+			holder.innerHTML = part;
+			return holder.textContent ?? "";
+		});
 	}
 	function nextSentenceIndex(shownIndex, count) {
 		return count === 0 ? 0 : (shownIndex + 1) % count;
@@ -850,6 +1010,7 @@
 	}
 	registerFeature(exampleSentenceFeature);
 	registerFeature(sentenceCycleFeature);
+	registerFeature(keepGuessingFeature);
 	mountSettingsLaunchers();
 	startEnabledFeatures();
 })();

@@ -14,4 +14,12 @@ Your answer always belongs to the sentence you were actually quizzed on — noth
 
 Idea from [Joseph G](https://greasyfork.org/en/users/1613422-joseph-g)'s [Bunpro Sentence Cycle](https://greasyfork.org/en/scripts/584571-bunpro-sentence-cycle).
 
+### Keep guessing after a wrong answer
+
+On a review you type an English translation or a reading into, Bunpro reveals the answer the moment you get it wrong, even if you were one word away. With this enabled, a wrong answer is not submitted at all: your text stays in the box so you can try again.
+
+To give up and see the answer, either clear the box and press **Enter**, or press **Enter** again on the same wrong answer. Cloze reviews are untouched, since Bunpro already hints there instead of revealing.
+
+Because a guess this catches never reaches Bunpro, the review is graded on the answer you finally submit.
+
 Source: [github.com/mwsmws22/mws-greasyfork](https://github.com/mwsmws22/mws-greasyfork/tree/main/better-bunpro)

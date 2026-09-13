@@ -5,8 +5,9 @@ import {
   type QuizState,
   type ReviewableRef,
 } from '../../bunpro/quiz-state';
+import { termKey } from '../../bunpro/review';
 import { loadSentences } from '../../quiz-sentence/load';
-import { solvedReviewKey, termKey } from '../../quiz-sentence/review';
+import { solvedReviewKey } from '../../quiz-sentence/review';
 import {
   clearSentence,
   dropSentenceUnless,

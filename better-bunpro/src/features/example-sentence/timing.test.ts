@@ -6,6 +6,9 @@ const vocab: QuizState = {
   sessionId: '1',
   reviewable: { id: 12842, type: 'vocab' },
   questionMode: 'translate',
+  inputMode: 'manual',
+  answers: ['to have guts'],
+  isPostAttempt: false,
   isRevealing: false,
   isCorrect: false,
 };

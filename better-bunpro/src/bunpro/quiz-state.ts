@@ -14,7 +14,14 @@ export interface ReviewableRef {
 export interface QuizState {
   sessionId: string | null;
   reviewable: ReviewableRef | null;
+  /** `translate`, `cloze`, `reading` or `listening`. */
   questionMode: string | null;
+  /** `manual` when the answer is typed, `flashcard` when it is graded by button. */
+  inputMode: string | null;
+  /** Every answer Bunpro would accept for the question on screen. */
+  answers: string[];
+  /** The question has been answered, whether or not the answer is on screen yet. */
+  isPostAttempt: boolean;
   isRevealing: boolean;
   isCorrect: boolean;
 }
@@ -23,6 +30,9 @@ const NO_QUIZ: QuizState = {
   sessionId: null,
   reviewable: null,
   questionMode: null,
+  inputMode: null,
+  answers: [],
+  isPostAttempt: false,
   isRevealing: false,
   isCorrect: false,
 };
@@ -36,6 +46,9 @@ export function readQuizState(): QuizState {
     sessionId: element.getAttribute('data-meta-session-id'),
     reviewable: parseReviewable(element.getAttribute('data-meta-info')),
     questionMode: element.getAttribute('data-meta-question-mode'),
+    inputMode: element.getAttribute('data-meta-input-mode'),
+    answers: parseAnswers(element.getAttribute('data-meta-answers-array')),
+    isPostAttempt: element.getAttribute('data-meta-is-post-attempt') === 'true',
     isRevealing: element.getAttribute('data-meta-is-revealing') === 'true',
     isCorrect: element.getAttribute('data-meta-is-correct') === 'true',
   };
@@ -79,6 +92,21 @@ export function watchQuizState(onChange: (state: QuizState) => void): () => void
     treeObserver.disconnect();
     attributeObserver?.disconnect();
   };
+}
+
+function parseAnswers(raw: string | null): string[] {
+  if (!raw || raw === 'null') {
+    return [];
+  }
+  try {
+    const parsed = JSON.parse(raw) as unknown;
+    if (!Array.isArray(parsed)) {
+      return [];
+    }
+    return parsed.filter((answer): answer is string => typeof answer === 'string');
+  } catch {
+    return [];
+  }
 }
 
 function parseReviewable(raw: string | null): ReviewableRef | null {

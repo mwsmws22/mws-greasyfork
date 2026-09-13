@@ -77,6 +77,16 @@ const CSS = `
 .bb-feature-desc {
   margin-top: 0.5rem;
 }
+.bb-wrong-guess {
+  animation: bb-shake 320ms ease;
+}
+@keyframes bb-shake {
+  0%, 100% { transform: translateX(0); }
+  20% { transform: translateX(-0.375rem); }
+  40% { transform: translateX(0.375rem); }
+  60% { transform: translateX(-0.25rem); }
+  80% { transform: translateX(0.125rem); }
+}
 `;
 
 export function injectStyles(): void {

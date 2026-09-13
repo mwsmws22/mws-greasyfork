@@ -53,6 +53,19 @@ export function nativeSentenceId(): number | null {
   return Number.isFinite(id) ? id : null;
 }
 
+/**
+ * The typed-answer field. Bunpro binds it to a romaji-to-kana converter for
+ * Japanese questions, so its value is already kana by the time it is submitted.
+ */
+export function findAnswerInput(): HTMLInputElement | null {
+  return document.querySelector<HTMLInputElement>('#js-manual-input');
+}
+
+/** Submits the answer, then becomes the button that moves on to the next question. */
+export function findSubmitButton(): HTMLElement | null {
+  return document.querySelector<HTMLElement>('.InputManual__button');
+}
+
 /** The row holding Bunpro's Exit / Quiz settings / Styling / Dictionary icons. */
 export function findQuizToolbar(): HTMLElement | null {
   const rows = document.querySelectorAll<HTMLElement>(`${QUIZ_ARTICLE} > header ul`);
