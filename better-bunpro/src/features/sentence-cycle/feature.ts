@@ -14,8 +14,8 @@ import {
   showSentence,
   shownSentence,
 } from '../../quiz-sentence/slot';
-import { isSettingsPanelOpen } from '../../settings/panel';
 import { injectStyles } from '../../styles';
+import { areKeystrokesClaimed } from '../../ui/keystrokes';
 import type { Feature } from '../registry';
 import { nextSentenceIndex } from './cycle';
 
@@ -71,7 +71,7 @@ function onQuizStateChange(state: QuizState): void {
  * everywhere else, including in our own settings panel.
  */
 function onKeyDown(event: KeyboardEvent): void {
-  if (event.key !== CYCLE_KEY || hasModifier(event) || isSettingsPanelOpen()) {
+  if (event.key !== CYCLE_KEY || hasModifier(event) || areKeystrokesClaimed()) {
     return;
   }
   const state = readQuizState();

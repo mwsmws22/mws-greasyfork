@@ -77,6 +77,22 @@ const CSS = `
 .bb-feature-desc {
   margin-top: 0.5rem;
 }
+.bb-add-synonym {
+  width: min(100%, 36rem);
+  margin: 0 auto;
+  padding: 0 0.375rem 0.5rem;
+}
+.bb-popover {
+  width: max-content;
+  max-width: min(20rem, calc(100vw - 1rem));
+}
+.bb-popover-term {
+  line-height: 1.6;
+}
+/** A word in a sentence that can be looked up, hinted at only on hover. */
+.bb-lookup-target {
+  cursor: pointer;
+}
 /**
  * The element is named in the selector to outweigh the \`text-primary-fg\` Bunpro
  * leaves on the field: Bunpro's stylesheets are linked after this one, so an
