@@ -71,6 +71,26 @@ export function findAnswerConsole(): HTMLElement | null {
   return document.querySelector<HTMLElement>('.InputManual');
 }
 
+/**
+ * Japanese of a review sentence: Bunpro's card, one of ours, or the cloze
+ * question. Clicks elsewhere — the English gloss, the audio, the quiz chrome —
+ * are not a term lookup.
+ */
+const SENTENCE_JAPANESE = [
+  `${QUIZ_ARTICLE} aside[id^="${NATIVE_CARD_ID_PREFIX}"] .bp-ddw`,
+  `${QUIZ_ARTICLE} aside[data-bb-study-question] .bp-ddw`,
+  `${QUIZ_ARTICLE} .bp-quiz-question > .text-center`,
+].join(', ');
+
+export function findSentenceJapanese(): HTMLElement[] {
+  return [...document.querySelectorAll<HTMLElement>(SENTENCE_JAPANESE)];
+}
+
+export function findLookupRoot(node: Node): HTMLElement | null {
+  const element = node instanceof Element ? node : node.parentElement;
+  return element?.closest<HTMLElement>(SENTENCE_JAPANESE) ?? null;
+}
+
 /** The row holding Bunpro's Exit / Quiz settings / Styling / Dictionary icons. */
 export function findQuizToolbar(): HTMLElement | null {
   const rows = document.querySelectorAll<HTMLElement>(`${QUIZ_ARTICLE} > header ul`);

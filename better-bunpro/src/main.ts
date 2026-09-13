@@ -3,12 +3,14 @@ import { exampleSentenceFeature } from './features/example-sentence/feature';
 import { humanTermAudioFeature } from './features/human-term-audio/feature';
 import { keepGuessingFeature } from './features/keep-guessing/feature';
 import { sentenceCycleFeature } from './features/sentence-cycle/feature';
+import { termLookupFeature } from './features/term-lookup/feature';
 import { mountSettingsLaunchers } from './settings/launcher';
 
 registerFeature(exampleSentenceFeature);
 registerFeature(sentenceCycleFeature);
 registerFeature(keepGuessingFeature);
 registerFeature(humanTermAudioFeature);
+registerFeature(termLookupFeature);
 
 mountSettingsLaunchers();
 startEnabledFeatures();

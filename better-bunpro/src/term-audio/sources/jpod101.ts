@@ -1,4 +1,4 @@
-import { isEntirelyKana } from '../../bunpro/japanese';
+import { isEntirelyKana } from '../../japanese/characters';
 import type { AudioSource, Word } from './source';
 
 const ENDPOINT = 'https://assets.languagepod101.com/dictionary/japanese/audiomp3.php';

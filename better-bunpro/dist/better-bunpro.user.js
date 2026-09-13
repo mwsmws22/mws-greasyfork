@@ -103,6 +103,17 @@
 	function findAnswerConsole() {
 		return document.querySelector(".InputManual");
 	}
+	var SENTENCE_JAPANESE = [
+		`${QUIZ_ARTICLE} aside[id^="${NATIVE_CARD_ID_PREFIX}"] .bp-ddw`,
+		`${QUIZ_ARTICLE} aside[data-bb-study-question] .bp-ddw`,
+		`${QUIZ_ARTICLE} .bp-quiz-question > .text-center`
+	].join(", ");
+	function findSentenceJapanese() {
+		return [...document.querySelectorAll(SENTENCE_JAPANESE)];
+	}
+	function findLookupRoot(node) {
+		return (node instanceof Element ? node : node.parentElement)?.closest(SENTENCE_JAPANESE) ?? null;
+	}
 	function findQuizToolbar() {
 		const rows = document.querySelectorAll(`${QUIZ_ARTICLE} > header ul`);
 		for (const row of rows) if (row.querySelector("button, a")) return row;
@@ -199,6 +210,77 @@
 	var API_BASE = "https://api.bunpro.jp/api/frontend";
 	var TOKEN_COOKIE = "frontend_api_token";
 	var LOCALE_COOKIE = "locale";
+	var JSON_HEADERS = {
+		Accept: "application/json",
+		"Content-Type": "application/json"
+	};
+	async function bunproRequest(path, init = {}) {
+		const token = readCookie(TOKEN_COOKIE);
+		if (!token) throw new Error(`No ${TOKEN_COOKIE} cookie found; are you signed in to Bunpro?`);
+		const response = await fetch(`${API_BASE}${path}`, {
+			...init,
+			credentials: "omit",
+			headers: {
+				Accept: "application/json",
+				Authorization: `Token token=${token}`,
+				...init.headers
+			}
+		});
+		const payload = isJson(response) ? await response.json() : null;
+		if (!response.ok) throw new Error(`${path} responded ${response.status}: ${describeErrors(payload, response)}`);
+		return payload;
+	}
+	function jsonBody(method, body) {
+		return {
+			method,
+			headers: JSON_HEADERS,
+			body: JSON.stringify(body)
+		};
+	}
+	function bunproLocale() {
+		return readCookie(LOCALE_COOKIE) ?? "en";
+	}
+	function attributesOf(document) {
+		const record = Array.isArray(document?.data) ? document.data[0] : document?.data;
+		return record?.attributes ? withRecordId(record) : null;
+	}
+	function includedOfType(document, type) {
+		return recordsOfType(document?.included, type);
+	}
+	function dataOfType(document, type) {
+		const data = document?.data;
+		return recordsOfType(Array.isArray(data) ? data : data ? [data] : [], type);
+	}
+	function recordsOfType(records, type) {
+		const matching = [];
+		for (const record of records ?? []) if (record.type === type && record.attributes) matching.push(withRecordId(record));
+		return matching;
+	}
+	function withRecordId(record) {
+		const attributes = record.attributes ?? {};
+		if (typeof attributes.id === "number") return attributes;
+		return {
+			...attributes,
+			id: Number(record.id)
+		};
+	}
+	function describeErrors(payload, response) {
+		const described = (payload?.errors ?? []).map((error) => error.detail ?? error.code ?? "").filter((text) => text !== "").join(", ");
+		return described === "" ? response.statusText : described;
+	}
+	function isJson(response) {
+		return response.headers.get("Content-Type")?.includes("application/json") === true;
+	}
+	function readCookie(name) {
+		for (const pair of document.cookie.split(";")) {
+			const separator = pair.indexOf("=");
+			if (separator === -1) continue;
+			if (pair.slice(0, separator).trim() !== name) continue;
+			const value = decodeURIComponent(pair.slice(separator + 1)).trim();
+			return value === "" ? null : value;
+		}
+		return null;
+	}
 	var inFlight = new Map();
 	function fetchItem(reviewable) {
 		const key = `${reviewable.type}:${reviewable.id}`;
@@ -213,49 +295,22 @@
 		return collectStudyQuestions(await fetchItem(reviewable));
 	}
 	async function fetchReviewable(reviewable) {
-		const attributes = (await fetchItem(reviewable)).data?.attributes;
+		const attributes = attributesOf(await fetchItem(reviewable));
 		return attributes ? attributes : null;
 	}
 	async function requestItem(reviewable) {
-		const token = readCookie(TOKEN_COOKIE);
-		if (!token) throw new Error(`No ${TOKEN_COOKIE} cookie found; are you signed in to Bunpro?`);
-		const locale = readCookie(LOCALE_COOKIE) ?? "en";
-		const url = `${API_BASE}/reviewables/${reviewable.type}/${reviewable.id}?locale=${locale}`;
-		const response = await fetch(url, {
-			credentials: "omit",
-			headers: {
-				Accept: "application/json",
-				Authorization: `Token token=${token}`
-			}
-		});
-		if (!response.ok) throw new Error(`${url} responded ${response.status}`);
-		return await response.json();
+		return bunproRequest(`/reviewables/${reviewable.type}/${reviewable.id}?locale=${bunproLocale()}`);
 	}
 	function collectStudyQuestions(payload) {
 		const sentences = [];
-		for (const entry of payload.included ?? []) {
-			if (entry.type !== "study_question" || !entry.attributes) continue;
-			const attributes = entry.attributes;
+		for (const attributes of includedOfType(payload, "study_question")) {
 			if (typeof attributes.content !== "string") continue;
-			sentences.push({
-				...attributes,
-				id: typeof attributes.id === "number" ? attributes.id : Number(entry.id)
-			});
+			sentences.push(attributes);
 		}
 		return sentences.sort(bySentenceOrder);
 	}
 	function bySentenceOrder(left, right) {
 		return (left.sentence_order ?? Number.MAX_SAFE_INTEGER) - (right.sentence_order ?? Number.MAX_SAFE_INTEGER);
-	}
-	function readCookie(name) {
-		for (const pair of document.cookie.split(";")) {
-			const separator = pair.indexOf("=");
-			if (separator === -1) continue;
-			if (pair.slice(0, separator).trim() !== name) continue;
-			const value = decodeURIComponent(pair.slice(separator + 1)).trim();
-			return value === "" ? null : value;
-		}
-		return null;
 	}
 	var reported = new Set();
 	function warnOnce(topic, message, error) {
@@ -315,6 +370,15 @@
 	var ALL_FULL_WIDTH = new RegExp(`^[${FULL_WIDTH_ALNUM}${SYMBOLS}${FULL_WIDTH_COMMA}]+$`);
 	function furiganaToRuby(text) {
 		return text.replace(FURIGANA_PAIR, (pair, base, reading) => canAnnotate(base, reading) ? toRuby(base, reading) : pair);
+	}
+	function furiganaToWritten(text) {
+		return dropAnnotations(text, (base) => base);
+	}
+	function furiganaToReading(text) {
+		return dropAnnotations(text, (_base, reading) => reading);
+	}
+	function dropAnnotations(text, keep) {
+		return text.replace(FURIGANA_PAIR, (pair, base, reading) => canAnnotate(base, reading) ? keep(base, reading) : pair);
 	}
 	function canAnnotate(base, reading) {
 		if (base === "" || reading === "" || NON_JAPANESE.test(reading)) return false;
@@ -592,6 +656,22 @@
 }
 .bb-feature-desc {
   margin-top: 0.5rem;
+}
+.bb-add-synonym {
+  width: min(100%, 36rem);
+  margin: 0 auto;
+  padding: 0 0.375rem 0.5rem;
+}
+.bb-popover {
+  width: max-content;
+  max-width: min(20rem, calc(100vw - 1rem));
+}
+.bb-popover-term {
+  line-height: 1.6;
+}
+/** A word in a sentence that can be looked up, hinted at only on hover. */
+.bb-lookup-target {
+  cursor: pointer;
 }
 /**
  * The element is named in the selector to outweigh the \`text-primary-fg\` Bunpro
@@ -921,7 +1001,7 @@ input.bb-wrong-guess {
 	var stopWatchingQuiz$1 = null;
 	var humanTermAudioFeature = {
 		id: "human-term-audio",
-		title: "Play real speakers instead of synthesised term audio",
+		title: "Play real speakers instead of TTS audio",
 		description: "When Bunpro would play synthesised audio for a vocabulary term, play a recording of a person saying it instead, looked up the same way Yomitan does (JapanesePod101, then Jisho). Sentence audio is left alone, and a term Bunpro already recorded is left alone. If nobody has recorded the word, the synthesised clip still plays.",
 		enabledByDefault: true,
 		start() {
@@ -938,103 +1018,34 @@ input.bb-wrong-guess {
 	function onQuizStateChange$1(state) {
 		if (state.reviewable?.type === "vocab") loadTermAudio(state.reviewable);
 	}
-	var version = "0.4.0";
-	var PANEL_ID = "bb-settings-panel";
-	var CARD_CLASS = "bb-panel-card relative z-1 flex flex-col overflow-hidden rounded-normal border border-rim bg-secondary-bg text-primary-fg shadow-normal";
-	var CLOSE_SHAPES = "<path d=\"M6 6 18 18M18 6 6 18\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\"/>";
-	var CARET_SHAPES = "<path d=\"M9.29 6.71a1 1 0 0 0 0 1.41L13.17 12l-3.88 3.88a1 1 0 1 0 1.41 1.41l4.59-4.59a1 1 0 0 0 0-1.41L10.7 6.7a1 1 0 0 0-1.41.01\" fill=\"currentColor\"/>";
-	function isSettingsPanelOpen() {
-		return document.getElementById(PANEL_ID) !== null;
+	var claims = [];
+	function claimKeystrokes(node, onEscape) {
+		const claim = {
+			node,
+			onEscape
+		};
+		claims.push(claim);
+		if (claims.length === 1) window.addEventListener("keydown", onKeyDown$2, true);
+		return () => {
+			const index = claims.indexOf(claim);
+			if (index !== -1) claims.splice(index, 1);
+			if (claims.length === 0) window.removeEventListener("keydown", onKeyDown$2, true);
+		};
 	}
-	function toggleSettingsPanel() {
-		const open = document.getElementById(PANEL_ID);
-		if (open) {
-			open.remove();
+	function areKeystrokesClaimed() {
+		return claims.length > 0;
+	}
+	function onKeyDown$2(event) {
+		const newest = claims[claims.length - 1];
+		if (!newest) return;
+		if (event.key === "Escape") {
+			event.preventDefault();
+			event.stopPropagation();
+			newest.onEscape();
 			return;
 		}
-		injectStyles();
-		const panel = buildPanel();
-		document.body.append(panel);
-		panel.querySelector(".bb-panel-card")?.focus();
-	}
-	function closePanel() {
-		document.getElementById(PANEL_ID)?.remove();
-	}
-	function buildPanel() {
-		const backdrop = element("button", {
-			class: "bb-backdrop absolute inset-0",
-			"aria-label": "Close settings"
-		});
-		backdrop.addEventListener("click", closePanel);
-		const card = element("div", {
-			class: CARD_CLASS,
-			tabindex: "-1"
-		}, [buildHeader(), element("div", { class: "grow overflow-y-auto p-16" }, [buildFeatureList()])]);
-		const panel = element("div", {
-			id: PANEL_ID,
-			class: "fixed inset-0 z-modal flex items-center justify-center p-16",
-			role: "dialog",
-			"aria-modal": "true"
-		}, [backdrop, card]);
-		panel.addEventListener("keydown", (event) => {
-			event.stopPropagation();
-			if (event.key === "Escape") closePanel();
-		});
-		return panel;
-	}
-	function buildHeader() {
-		const close = element("button", {
-			class: "text-primary-accent",
-			title: "Close",
-			"aria-label": "Close"
-		}, [svgIcon("h-24 w-24", CLOSE_SHAPES)]);
-		close.addEventListener("click", closePanel);
-		return element("header", { class: "flex items-center justify-between gap-16 border-b border-rim p-16" }, [element("div", { class: "flex items-baseline gap-8" }, [element("h2", { class: "text-large font-bold" }, ["Better Bunpro"]), element("span", { class: "text-small text-tertiary-fg" }, [`v${scriptVersion()}`])]), close]);
-	}
-	function scriptVersion() {
-		return version;
-	}
-	function buildFeatureList() {
-		return element("ul", { class: "grid gap-16" }, listFeatures().map(buildFeatureRow));
-	}
-	function buildFeatureRow(feature) {
-		const description = element("p", { class: "bb-feature-desc text-small text-tertiary-fg" }, [feature.description]);
-		const caret = svgIcon("bb-feature-caret", CARET_SHAPES);
-		return element("li", { class: "flex items-start justify-between gap-16" }, [element("details", { class: "bb-feature-about grow" }, [element("summary", { class: "bb-feature-about-summary font-bold" }, [element("span", {}, [feature.title]), caret]), ...feature.credit ? [description, buildCredit(feature.credit)] : [description]]), buildSwitch(feature)]);
-	}
-	function buildCredit(credit) {
-		return element("p", { class: "bb-feature-desc text-small text-tertiary-fg" }, [
-			"Idea from ",
-			buildLink(credit.author, credit.authorUrl),
-			"’s ",
-			buildLink(credit.work, credit.workUrl),
-			"."
-		]);
-	}
-	function buildLink(text, href) {
-		return element("a", {
-			href,
-			target: "_blank",
-			rel: "noreferrer noopener",
-			class: "text-primary-accent"
-		}, [text]);
-	}
-	function buildSwitch(feature) {
-		const button = element("button", {
-			role: "switch",
-			"aria-label": feature.title
-		});
-		const paint = () => {
-			const enabled = isFeatureEnabled(feature);
-			button.setAttribute("aria-checked", String(enabled));
-			button.className = `bb-switch ${enabled ? "bg-primary-accent" : "bg-tertiary-bg"}`;
-		};
-		button.addEventListener("click", () => {
-			setFeatureEnabled(feature, !isFeatureEnabled(feature));
-			paint();
-		});
-		paint();
-		return button;
+		const target = event.target;
+		if (target instanceof Node && claims.some((claim) => claim.node.contains(target))) event.stopPropagation();
 	}
 	var WRONG_CLASS = "bb-wrong-guess";
 	var SHAKE_CLASS = "bb-shaking";
@@ -1063,6 +1074,18 @@ input.bb-wrong-guess {
 		input.dataset[WATCHED_ATTRIBUTE] = "true";
 		input.addEventListener("input", clearMark);
 		input.addEventListener("animationend", () => input.classList.remove(SHAKE_CLASS));
+	}
+	var LIGATURES = {
+		æ: "ae",
+		œ: "oe",
+		ß: "ss"
+	};
+	function normalize(text) {
+		return [...text.toLowerCase()].map(foldLetter).join("").trim();
+	}
+	function foldLetter(letter) {
+		if (isJapanese(letter)) return letter;
+		return (LIGATURES[letter] ?? letter).normalize("NFD").replace(/[\u0300-\u036f]/g, "");
 	}
 	var TRANSLATION_SIMILARITY = .8;
 	var LATIN_LETTER = /[a-z]/i;
@@ -1100,18 +1123,6 @@ input.bb-wrong-guess {
 		});
 		return row[target.length - 1] ?? left.length;
 	}
-	var LIGATURES = {
-		æ: "ae",
-		œ: "oe",
-		ß: "ss"
-	};
-	function normalize(text) {
-		return [...text.toLowerCase()].map(foldLetter).join("").trim();
-	}
-	function foldLetter(letter) {
-		if (isJapanese(letter)) return letter;
-		return (LIGATURES[letter] ?? letter).normalize("NFD").replace(/[\u0300-\u036f]/g, "");
-	}
 	var SUBMIT_KEY = "Enter";
 	var lastRejected = null;
 	var keepGuessingFeature = {
@@ -1122,19 +1133,19 @@ input.bb-wrong-guess {
 		start() {
 			injectStyles();
 			window.addEventListener("keydown", onKeyDown$1, true);
-			window.addEventListener("click", onClick, true);
+			window.addEventListener("click", onClick$1, true);
 		},
 		stop() {
 			window.removeEventListener("keydown", onKeyDown$1, true);
-			window.removeEventListener("click", onClick, true);
+			window.removeEventListener("click", onClick$1, true);
 			lastRejected = null;
 		}
 	};
 	function onKeyDown$1(event) {
-		if (event.key !== SUBMIT_KEY || event.repeat || hasModifier$1(event) || isSettingsPanelOpen()) return;
+		if (event.key !== SUBMIT_KEY || event.repeat || hasModifier$1(event) || areKeystrokesClaimed()) return;
 		swallowIfWrong(event);
 	}
-	function onClick(event) {
+	function onClick$1(event) {
 		const target = event.target;
 		if (!(target instanceof Node) || findSubmitButton()?.contains(target) !== true) return;
 		swallowIfWrong(event);
@@ -1241,7 +1252,7 @@ input.bb-wrong-guess {
 		if (state.reviewable && state.sessionId) loadSentences(state.reviewable);
 	}
 	function onKeyDown(event) {
-		if (event.key !== CYCLE_KEY || hasModifier(event) || isSettingsPanelOpen()) return;
+		if (event.key !== CYCLE_KEY || hasModifier(event) || areKeystrokesClaimed()) return;
 		const state = readQuizState();
 		const reviewKey = solvedReviewKey(state);
 		if (!reviewKey || !state.reviewable || !hasSentenceToCycle(reviewKey)) return;
@@ -1264,6 +1275,754 @@ input.bb-wrong-guess {
 			sentences,
 			index: nextSentenceIndex(shown?.reviewKey === reviewKey ? shown.index : bunproSentenceIndex(sentences), sentences.length)
 		});
+	}
+	var I_COLUMN = {
+		い: "う",
+		き: "く",
+		ぎ: "ぐ",
+		し: "す",
+		ち: "つ",
+		に: "ぬ",
+		び: "ぶ",
+		み: "む",
+		り: "る"
+	};
+	var A_COLUMN = {
+		わ: "う",
+		か: "く",
+		が: "ぐ",
+		さ: "す",
+		た: "つ",
+		な: "ぬ",
+		ば: "ぶ",
+		ま: "む",
+		ら: "る"
+	};
+	var E_COLUMN = {
+		え: "う",
+		け: "く",
+		げ: "ぐ",
+		せ: "す",
+		て: "つ",
+		ね: "ぬ",
+		べ: "ぶ",
+		め: "む",
+		れ: "る"
+	};
+	var O_COLUMN = {
+		お: "う",
+		こ: "く",
+		ご: "ぐ",
+		そ: "す",
+		と: "つ",
+		の: "ぬ",
+		ぼ: "ぶ",
+		も: "む",
+		ろ: "る"
+	};
+	var VERB = [
+		"ichidan",
+		"godan",
+		"any"
+	];
+	var RULES = [
+		...politeRules(),
+		...negativeRules(),
+		...pastAndConjunctiveRules(),
+		...potentialAndPassiveRules(),
+		...volitionalAndConditionalRules(),
+		...desireRules(),
+		...adjectiveRules()
+	];
+	var MAX_CHAINED_RULES = 4;
+	function deinflect(word) {
+		const found = [word];
+		const classOf = new Map([[word, "any"]]);
+		for (let depth = 0; depth < MAX_CHAINED_RULES; depth += 1) {
+			const grown = found.slice();
+			for (const form of grown) for (const derived of applyRules(form, classOf.get(form) ?? "any")) {
+				if (classOf.has(derived.word)) continue;
+				classOf.set(derived.word, derived.wordClass);
+				found.push(derived.word);
+			}
+			if (found.length === grown.length) break;
+		}
+		return found;
+	}
+	function applyRules(word, wordClass) {
+		const derived = [];
+		for (const rule of RULES) {
+			if (!rule.accepts.includes(wordClass) || !word.endsWith(rule.from)) continue;
+			const stem = word.slice(0, word.length - rule.from.length);
+			if (stem === "") continue;
+			derived.push({
+				word: `${stem}${rule.to}`,
+				wordClass: rule.produces
+			});
+		}
+		return derived;
+	}
+	function verbRules(suffix) {
+		return [{
+			from: suffix,
+			to: "る",
+			accepts: ["any"],
+			produces: "ichidan"
+		}, ...columnRules(I_COLUMN, suffix, ["any"])];
+	}
+	function columnRules(column, suffix, accepts) {
+		return Object.entries(column).map(([stem, dictionary]) => ({
+			from: `${stem}${suffix}`,
+			to: dictionary,
+			accepts,
+			produces: "godan"
+		}));
+	}
+	function politeRules() {
+		return [
+			...verbRules("ます"),
+			...verbRules("ません"),
+			...verbRules("ました"),
+			...verbRules("ませんでした"),
+			...verbRules("まして")
+		];
+	}
+	function negativeRules() {
+		return [
+			"ない",
+			"なかった",
+			"なくて"
+		].flatMap((suffix) => [{
+			from: suffix,
+			to: "る",
+			accepts: [...VERB],
+			produces: "ichidan"
+		}, ...columnRules(A_COLUMN, suffix, [...VERB])]);
+	}
+	function pastAndConjunctiveRules() {
+		const godan = [
+			["った", "う"],
+			["った", "つ"],
+			["った", "る"],
+			["いた", "く"],
+			["いだ", "ぐ"],
+			["した", "す"],
+			["んだ", "ぬ"],
+			["んだ", "ぶ"],
+			["んだ", "む"],
+			["って", "う"],
+			["って", "つ"],
+			["って", "る"],
+			["いて", "く"],
+			["いで", "ぐ"],
+			["して", "す"],
+			["んで", "ぬ"],
+			["んで", "ぶ"],
+			["んで", "む"]
+		];
+		return [
+			{
+				from: "た",
+				to: "る",
+				accepts: [...VERB],
+				produces: "ichidan"
+			},
+			{
+				from: "て",
+				to: "る",
+				accepts: [...VERB],
+				produces: "ichidan"
+			},
+			...godan.map(([from, to]) => ({
+				from,
+				to,
+				accepts: [...VERB],
+				produces: "godan"
+			}))
+		];
+	}
+	function potentialAndPassiveRules() {
+		return [
+			{
+				from: "られる",
+				to: "る",
+				accepts: [...VERB],
+				produces: "ichidan"
+			},
+			{
+				from: "させる",
+				to: "る",
+				accepts: [...VERB],
+				produces: "ichidan"
+			},
+			...verbRules("れる"),
+			...verbRules("せる"),
+			...columnRules(E_COLUMN, "る", [...VERB])
+		];
+	}
+	function volitionalAndConditionalRules() {
+		return [
+			{
+				from: "よう",
+				to: "る",
+				accepts: [...VERB],
+				produces: "ichidan"
+			},
+			...columnRules(O_COLUMN, "う", [...VERB]),
+			{
+				from: "れば",
+				to: "る",
+				accepts: ["ichidan", "any"],
+				produces: "ichidan"
+			},
+			...columnRules(E_COLUMN, "ば", [...VERB])
+		];
+	}
+	function desireRules() {
+		return [
+			...verbRules("たい"),
+			...verbRules("たがる"),
+			...verbRules("そう"),
+			...verbRules("やすい"),
+			...verbRules("にくい"),
+			...verbRules("ながら")
+		];
+	}
+	function adjectiveRules() {
+		return [
+			{
+				from: "くない",
+				to: "い",
+				accepts: ["adjective", "any"],
+				produces: "adjective"
+			},
+			{
+				from: "くなかった",
+				to: "い",
+				accepts: ["adjective", "any"],
+				produces: "adjective"
+			},
+			{
+				from: "かった",
+				to: "い",
+				accepts: ["adjective", "any"],
+				produces: "adjective"
+			},
+			{
+				from: "くて",
+				to: "い",
+				accepts: ["adjective", "any"],
+				produces: "adjective"
+			},
+			{
+				from: "く",
+				to: "い",
+				accepts: ["adjective", "any"],
+				produces: "adjective"
+			},
+			{
+				from: "ければ",
+				to: "い",
+				accepts: ["adjective", "any"],
+				produces: "adjective"
+			},
+			{
+				from: "さ",
+				to: "い",
+				accepts: ["adjective", "any"],
+				produces: "adjective"
+			}
+		];
+	}
+	function termSurfaces(textFromClick) {
+		const run = leadingJapanese$1(textFromClick);
+		const surfaces = [];
+		for (let length = run.length; length > 0; length -= 1) surfaces.push(run.slice(0, length));
+		return surfaces;
+	}
+	function lookupForms(surface) {
+		return deinflect(surface);
+	}
+	function leadingJapanese$1(text) {
+		const characters = [...text];
+		let length = 0;
+		while (length < characters.length && length < 6) {
+			if (!isJapanese(characters[length] ?? "")) break;
+			length += 1;
+		}
+		return characters.slice(0, length).join("");
+	}
+	var cache = new Map();
+	function searchVocab(query) {
+		let request = cache.get(query);
+		if (!request) {
+			request = requestVocabSearch(query);
+			cache.set(query, request);
+		}
+		return request;
+	}
+	async function requestVocabSearch(query) {
+		return parseVocabSearch((await bunproRequest("/search/reviewables_v1_1", jsonBody("POST", {
+			query,
+			options: {
+				include_reviews: true,
+				include_bookmarks: false,
+				include_notes: false,
+				only_bookmarks: false
+			},
+			is_searching_grammar: false,
+			is_searching_vocab: true
+		})))?.vocabs ?? null);
+	}
+	function parseVocabSearch(vocabs) {
+		const reviews = includedOfType(vocabs, "review");
+		return dataOfType(vocabs, "vocab").map((attributes) => {
+			const furigana = asText(attributes.furigana);
+			return {
+				id: Number(attributes.id),
+				type: "vocab",
+				furigana,
+				written: furiganaToWritten(furigana),
+				reading: furiganaToReading(furigana),
+				meaning: asText(attributes.meaning),
+				slug: asText(attributes.slug),
+				isInReviews: reviews.some((review) => review.reviewable_id === Number(attributes.id))
+			};
+		});
+	}
+	function matchingTerm(terms, word) {
+		return terms.find((term) => term.written === word || term.reading === word) ?? null;
+	}
+	function termPageUrl(term) {
+		return `https://bunpro.jp/vocabs/${term.slug}`;
+	}
+	function termSearchUrl(word) {
+		return `https://bunpro.jp/search?query=${encodeURIComponent(word)}`;
+	}
+	function asText(value) {
+		return typeof value === "string" ? value : "";
+	}
+	var QUERY_BUDGET = 8;
+	async function lookupClickedTerm(textFromClick, search = searchVocab) {
+		const surfaces = termSurfaces(textFromClick);
+		let remaining = QUERY_BUDGET;
+		for (const surface of surfaces) for (const form of lookupForms(surface)) {
+			if (remaining <= 0) return null;
+			remaining -= 1;
+			const match = matchingTerm(await search(form), form);
+			if (match) return {
+				surface,
+				term: match
+			};
+		}
+		return null;
+	}
+	function textRunFromPieces(pieces, startPiece, startOffset) {
+		const start = pieces[startPiece];
+		if (!start) return "";
+		const collected = [start.text.slice(startOffset)];
+		for (const piece of pieces.slice(startPiece + 1)) {
+			if (start.role === "written" && piece.role === "reading") continue;
+			collected.push(piece.text);
+		}
+		return leadingJapanese(collected.join(""));
+	}
+	function textRunFromCaret(root, caret, offset) {
+		const textNode = isText(caret) ? caret : firstText(caret.childNodes[offset] ?? caret);
+		if (!textNode) return "";
+		const pieces = piecesOf(root);
+		const start = indexOfCaret(pieces, textNode, isText(caret) ? offset : 0);
+		if (!start) return leadingJapanese(textOf(textNode).slice(isText(caret) ? offset : 0));
+		return textRunFromPieces(pieces.map((piece) => piece.piece), start.index, start.offset);
+	}
+	function firstText(node) {
+		if (isText(node)) return node;
+		for (const child of node.childNodes) {
+			const found = firstText(child);
+			if (found) return found;
+		}
+		return null;
+	}
+	function piecesOf(root) {
+		const pieces = [];
+		walk(root, (node) => {
+			if (!isText(node) || textOf(node) === "") return;
+			const role = roleOf(node);
+			if (role === "skip") return;
+			pieces.push({
+				piece: {
+					text: textOf(node),
+					role
+				},
+				node
+			});
+		});
+		return pieces;
+	}
+	function indexOfCaret(pieces, caret, offset) {
+		const index = pieces.findIndex((piece) => piece.node === caret);
+		if (index === -1) return null;
+		return {
+			index,
+			offset
+		};
+	}
+	function roleOf(node) {
+		if (closestTag(node, "RP")) return "skip";
+		if (closestTag(node, "RT")) return "reading";
+		return "written";
+	}
+	function closestTag(node, tag) {
+		let current = node;
+		while (current) {
+			if (isElement(current) && current.tagName === tag) return true;
+			current = current.parentNode;
+		}
+		return false;
+	}
+	function walk(node, visit) {
+		visit(node);
+		for (const child of node.childNodes) walk(child, visit);
+	}
+	function isText(node) {
+		return node.nodeType === Node.TEXT_NODE;
+	}
+	function isElement(node) {
+		return node.nodeType === Node.ELEMENT_NODE;
+	}
+	function textOf(node) {
+		return node.nodeType === Node.TEXT_NODE ? node.textContent ?? "" : "";
+	}
+	function leadingJapanese(text) {
+		const characters = [...text];
+		let length = 0;
+		while (length < characters.length && isJapanese(characters[length] ?? "")) length += 1;
+		return characters.slice(0, length).join("");
+	}
+	var POPOVER_ID = "bb-popover";
+	var CARD_CLASS$1 = "bb-popover fixed z-modal flex flex-col gap-8 rounded-normal border border-rim bg-secondary-bg p-12 text-primary-fg shadow-normal animate-fade-in";
+	var VIEWPORT_MARGIN = 8;
+	var ANCHOR_GAP = 6;
+	var open = null;
+	function openPopover(anchor, content) {
+		closePopover();
+		injectStyles();
+		const card = element("div", {
+			id: POPOVER_ID,
+			class: CARD_CLASS$1,
+			role: "dialog"
+		}, [content]);
+		document.body.append(card);
+		open = {
+			card,
+			anchor,
+			release: claimKeystrokes(card, closePopover)
+		};
+		positionPopover();
+		window.addEventListener("pointerdown", onPointerDown, true);
+		window.addEventListener("scroll", positionPopover, true);
+		window.addEventListener("resize", positionPopover);
+	}
+	function closePopover() {
+		if (!open) return;
+		open.release();
+		open.card.remove();
+		open = null;
+		window.removeEventListener("pointerdown", onPointerDown, true);
+		window.removeEventListener("scroll", positionPopover, true);
+		window.removeEventListener("resize", positionPopover);
+	}
+	function replacePopoverContent(content) {
+		if (!open) return;
+		open.card.replaceChildren(content);
+		positionPopover();
+	}
+	function onPointerDown(event) {
+		const target = event.target;
+		if (!open || target instanceof Node && open.card.contains(target)) return;
+		closePopover();
+	}
+	function positionPopover() {
+		if (!open) return;
+		const anchor = open.anchor();
+		if (!anchor) {
+			closePopover();
+			return;
+		}
+		const card = open.card.getBoundingClientRect();
+		const spaceBelow = window.innerHeight - anchor.bottom - ANCHOR_GAP - VIEWPORT_MARGIN;
+		const top = card.height <= spaceBelow ? anchor.bottom + ANCHOR_GAP : Math.max(VIEWPORT_MARGIN, anchor.top - ANCHOR_GAP - card.height);
+		const left = clamp(anchor.left + anchor.width / 2 - card.width / 2, VIEWPORT_MARGIN, window.innerWidth - card.width - VIEWPORT_MARGIN);
+		open.card.style.top = `${Math.round(top)}px`;
+		open.card.style.left = `${Math.round(Math.max(VIEWPORT_MARGIN, left))}px`;
+	}
+	function clamp(value, lowest, highest) {
+		return Math.min(Math.max(value, lowest), highest);
+	}
+	var PASCAL_TYPE = {
+		vocab: "Vocab",
+		grammar_point: "GrammarPoint"
+	};
+	async function addTermToReviews(term) {
+		await bunproRequest("/reviews/update_via_action_type", jsonBody("PATCH", {
+			action_type: "add",
+			deck_id: null,
+			reviewables: [reviewableTuple(term)]
+		}));
+	}
+	function reviewableTuple(term) {
+		return [PASCAL_TYPE[term.type], term.id];
+	}
+	var BASE_CLASS = "flex w-full items-center justify-center gap-4 rounded-normal border px-12 py-6 text-extra-small md:text-body font-normal transition-colors";
+	var STATE_CLASS = {
+		idle: "border-rim bg-secondary-bg text-primary-fg",
+		working: "border-rim bg-secondary-bg text-tertiary-fg",
+		done: "border-rim bg-secondary-bg text-correct",
+		failed: "border-rim bg-secondary-bg text-error"
+	};
+	function buildActionButton(options) {
+		const label = element("span", { class: "text-left" });
+		const button = element("button", { type: "button" }, options.icon ? [svgIcon("h-24 w-24 shrink-0", options.icon), label] : [label]);
+		let state = options.startAs === "done" ? "done" : "idle";
+		let message = null;
+		const paint = () => {
+			button.className = `${BASE_CLASS} ${STATE_CLASS[state]}`;
+			label.textContent = message ?? options.labels[state];
+			button.disabled = state === "working" || state === "done";
+		};
+		button.addEventListener("click", () => {
+			if (state === "working" || state === "done") return;
+			state = "working";
+			message = null;
+			paint();
+			options.run().then((outcome) => {
+				state = "done";
+				message = typeof outcome === "string" ? outcome : null;
+				paint();
+			}, (error) => {
+				console.warn("[Better Bunpro]", options.labels.failed, error);
+				state = "failed";
+				message = null;
+				paint();
+			});
+		});
+		paint();
+		return button;
+	}
+	function buildLookupPending() {
+		return element("p", { class: "bb-popover-term text-small text-tertiary-fg" }, ["Looking up…"]);
+	}
+	function buildLookupCard(found, word) {
+		return found ? buildFoundCard(found) : buildMissingCard(word);
+	}
+	function buildFoundCard(found) {
+		const heading = element("p", { class: "bb-popover-term text-large font-bold" });
+		heading.innerHTML = furiganaToRuby(found.term.furigana);
+		return element("div", { class: "flex flex-col gap-8" }, [
+			heading,
+			element("p", { class: "text-small text-secondary-fg" }, [found.term.meaning]),
+			buildActionButton({
+				labels: {
+					idle: "Add to reviews",
+					working: "Adding…",
+					done: found.term.isInReviews ? "Already in reviews" : "Added to reviews",
+					failed: "Could not add to reviews"
+				},
+				startAs: found.term.isInReviews ? "done" : "idle",
+				run: () => addTermToReviews(found.term)
+			}),
+			buildLink$1("More info", termPageUrl(found.term))
+		]);
+	}
+	function buildMissingCard(word) {
+		return element("div", { class: "flex flex-col gap-8" }, [
+			element("p", { class: "bb-popover-term text-large font-bold" }, [word]),
+			element("p", { class: "text-small text-tertiary-fg" }, ["No matching Bunpro vocab."]),
+			buildLink$1("Search Bunpro", termSearchUrl(word))
+		]);
+	}
+	function buildLink$1(label, href) {
+		return element("a", {
+			href,
+			target: "_blank",
+			rel: "noreferrer noopener",
+			class: "text-small text-primary-accent"
+		}, [label]);
+	}
+	var LOOKUP_CLASS = "bb-lookup-target";
+	var remountObserver = null;
+	var lookupGeneration = 0;
+	var termLookupFeature = {
+		id: "term-lookup",
+		title: "Look up words in example sentences",
+		description: "Click a Japanese word in an example sentence, a cloze question, or an unverified sentence to look it up on Bunpro. The popup shows the reading and meaning when Bunpro has them, a button to add the term to your reviews, and a link to its page. Words are recognised the same way Yomitan is: the longest match from the click, deinflected, against Bunpro's own vocab search.",
+		enabledByDefault: true,
+		start() {
+			injectStyles();
+			markLookupTargets();
+			remountObserver = new MutationObserver(markLookupTargets);
+			remountObserver.observe(document.body, {
+				childList: true,
+				subtree: true
+			});
+			window.addEventListener("click", onClick, true);
+		},
+		stop() {
+			lookupGeneration += 1;
+			window.removeEventListener("click", onClick, true);
+			remountObserver?.disconnect();
+			remountObserver = null;
+			closePopover();
+			for (const node of document.querySelectorAll(`.${LOOKUP_CLASS}`)) node.classList.remove(LOOKUP_CLASS);
+		}
+	};
+	function markLookupTargets() {
+		for (const node of findSentenceJapanese()) node.classList.add(LOOKUP_CLASS);
+	}
+	function onClick(event) {
+		if (event.button !== 0 || hasSelection()) return;
+		const target = event.target;
+		if (!(target instanceof Node)) return;
+		if ((target instanceof Element ? target : target.parentElement)?.closest("button, a")) return;
+		const root = findLookupRoot(target);
+		const caret = caretFromClick(event);
+		if (!root || !caret || !root.contains(caret.node)) return;
+		const word = textRunFromCaret(root, caret.node, caret.offset);
+		if (word === "") return;
+		event.stopPropagation();
+		lookupGeneration += 1;
+		const generation = lookupGeneration;
+		openPopover(rectOf(root, caret), buildLookupPending());
+		fillPopover(word, generation);
+	}
+	async function fillPopover(word, generation) {
+		const found = await lookupClickedTerm(word);
+		if (generation !== lookupGeneration) return;
+		replacePopoverContent(buildLookupCard(found, found?.surface ?? word));
+	}
+	function hasSelection() {
+		return (window.getSelection()?.toString() ?? "") !== "";
+	}
+	function caretFromClick(event) {
+		const caret = document.caretPositionFromPoint?.(event.clientX, event.clientY);
+		if (caret) return {
+			node: caret.offsetNode,
+			offset: caret.offset
+		};
+		const range = document.caretRangeFromPoint?.(event.clientX, event.clientY);
+		return range ? {
+			node: range.startContainer,
+			offset: range.startOffset
+		} : null;
+	}
+	function rectOf(root, caret) {
+		const range = document.createRange();
+		try {
+			range.setStart(caret.node, caret.offset);
+			const end = caret.node.nodeType === Node.TEXT_NODE ? Math.min(caret.offset + 1, caret.node.textContent?.length ?? caret.offset) : caret.offset;
+			range.setEnd(caret.node, end);
+		} catch {
+			return () => root.isConnected ? root.getBoundingClientRect() : null;
+		}
+		return () => {
+			if (!root.isConnected) return null;
+			const rect = range.getBoundingClientRect();
+			if (rect.x === 0 && rect.y === 0 && rect.width === 0 && rect.height === 0) return root.getBoundingClientRect();
+			return rect.width === 0 ? new DOMRect(rect.x, rect.y, 1, Math.max(rect.height, 1)) : rect;
+		};
+	}
+	var version = "0.4.0";
+	var PANEL_ID = "bb-settings-panel";
+	var CARD_CLASS = "bb-panel-card relative z-1 flex flex-col overflow-hidden rounded-normal border border-rim bg-secondary-bg text-primary-fg shadow-normal";
+	var CLOSE_SHAPES = "<path d=\"M6 6 18 18M18 6 6 18\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\"/>";
+	var CARET_SHAPES = "<path d=\"M9.29 6.71a1 1 0 0 0 0 1.41L13.17 12l-3.88 3.88a1 1 0 1 0 1.41 1.41l4.59-4.59a1 1 0 0 0 0-1.41L10.7 6.7a1 1 0 0 0-1.41.01\" fill=\"currentColor\"/>";
+	var releaseKeystrokes = null;
+	function toggleSettingsPanel() {
+		if (document.getElementById(PANEL_ID)) {
+			closePanel();
+			return;
+		}
+		injectStyles();
+		const panel = buildPanel();
+		document.body.append(panel);
+		releaseKeystrokes = claimKeystrokes(panel, closePanel);
+		panel.querySelector(".bb-panel-card")?.focus();
+	}
+	function closePanel() {
+		releaseKeystrokes?.();
+		releaseKeystrokes = null;
+		document.getElementById(PANEL_ID)?.remove();
+	}
+	function buildPanel() {
+		const backdrop = element("button", {
+			class: "bb-backdrop absolute inset-0",
+			"aria-label": "Close settings"
+		});
+		backdrop.addEventListener("click", closePanel);
+		const card = element("div", {
+			class: CARD_CLASS,
+			tabindex: "-1"
+		}, [buildHeader(), element("div", { class: "grow overflow-y-auto p-16" }, [buildFeatureList()])]);
+		return element("div", {
+			id: PANEL_ID,
+			class: "fixed inset-0 z-modal flex items-center justify-center p-16",
+			role: "dialog",
+			"aria-modal": "true"
+		}, [backdrop, card]);
+	}
+	function buildHeader() {
+		const close = element("button", {
+			class: "text-primary-accent",
+			title: "Close",
+			"aria-label": "Close"
+		}, [svgIcon("h-24 w-24", CLOSE_SHAPES)]);
+		close.addEventListener("click", closePanel);
+		return element("header", { class: "flex items-center justify-between gap-16 border-b border-rim p-16" }, [element("div", { class: "flex items-baseline gap-8" }, [element("h2", { class: "text-large font-bold" }, ["Better Bunpro"]), element("span", { class: "text-small text-tertiary-fg" }, [`v${scriptVersion()}`])]), close]);
+	}
+	function scriptVersion() {
+		return version;
+	}
+	function buildFeatureList() {
+		return element("ul", { class: "grid gap-16" }, listFeatures().map(buildFeatureRow));
+	}
+	function buildFeatureRow(feature) {
+		const description = element("p", { class: "bb-feature-desc text-small text-tertiary-fg" }, [feature.description]);
+		const caret = svgIcon("bb-feature-caret", CARET_SHAPES);
+		return element("li", { class: "flex items-start justify-between gap-16" }, [element("details", { class: "bb-feature-about grow" }, [element("summary", { class: "bb-feature-about-summary font-bold" }, [element("span", {}, [feature.title]), caret]), ...feature.credit ? [description, buildCredit(feature.credit)] : [description]]), buildSwitch(feature)]);
+	}
+	function buildCredit(credit) {
+		return element("p", { class: "bb-feature-desc text-small text-tertiary-fg" }, [
+			"Idea from ",
+			buildLink(credit.author, credit.authorUrl),
+			"’s ",
+			buildLink(credit.work, credit.workUrl),
+			"."
+		]);
+	}
+	function buildLink(text, href) {
+		return element("a", {
+			href,
+			target: "_blank",
+			rel: "noreferrer noopener",
+			class: "text-primary-accent"
+		}, [text]);
+	}
+	function buildSwitch(feature) {
+		const button = element("button", {
+			role: "switch",
+			"aria-label": feature.title
+		});
+		const paint = () => {
+			const enabled = isFeatureEnabled(feature);
+			button.setAttribute("aria-checked", String(enabled));
+			button.className = `bb-switch ${enabled ? "bg-primary-accent" : "bg-tertiary-bg"}`;
+		};
+		button.addEventListener("click", () => {
+			setFeatureEnabled(feature, !isFeatureEnabled(feature));
+			paint();
+		});
+		paint();
+		return button;
 	}
 	var LAUNCHER_MARKER = "data-bb-launcher";
 	var TUNE_SHAPES = `<g fill="currentColor">
@@ -1309,6 +2068,7 @@ input.bb-wrong-guess {
 	registerFeature(sentenceCycleFeature);
 	registerFeature(keepGuessingFeature);
 	registerFeature(humanTermAudioFeature);
+	registerFeature(termLookupFeature);
 	mountSettingsLaunchers();
 	startEnabledFeatures();
 })();
