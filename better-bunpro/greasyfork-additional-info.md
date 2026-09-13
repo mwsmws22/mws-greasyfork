@@ -4,6 +4,6 @@ Open settings from the **sliders icon** in the quiz toolbar, or Tampermonkey →
 
 ### Show unverified example sentences for A1+ vocab
 
-Bunpro does not show unverified example sentences for A1+ vocab in reviews, even though they are present (this is available on mobile). After a correct answer, this shows one of those sentences and cycles through them each review session.
+On the web, Bunpro does not show unverified example sentences for A1+ vocab, even if you enable "Display Sentence alongside Translation Questions" in review settings. That is despite such a feature being present in the mobile app. If enabled, this feature will show these unverified sentences after submitting a correct answer, and it will cycle through which sentence is displayed for each review session.
 
 Source: [github.com/mwsmws22/mws-greasyfork](https://github.com/mwsmws22/mws-greasyfork/tree/main/better-bunpro)
