@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Better Bunpro
 // @namespace    mwsmws22
-// @version      0.4.0
+// @version      0.4.1
 // @author       mwsmws22
 // @description  Features I wish Bunpro had. Show example sentences for A1+ vocab after a correct answer, cycle sentences with Tab, keep guessing after a wrong answer, play real speakers instead of synthesised term audio, and more.
 // @license      MIT
@@ -921,7 +921,7 @@ input.bb-wrong-guess {
 	var stopWatchingQuiz$1 = null;
 	var humanTermAudioFeature = {
 		id: "human-term-audio",
-		title: "Play real speakers instead of synthesised term audio",
+		title: "Play real speakers instead of TTS audio",
 		description: "When Bunpro would play synthesised audio for a vocabulary term, play a recording of a person saying it instead, looked up the same way Yomitan does (JapanesePod101, then Jisho). Sentence audio is left alone, and a term Bunpro already recorded is left alone. If nobody has recorded the word, the synthesised clip still plays.",
 		enabledByDefault: true,
 		start() {
@@ -938,7 +938,7 @@ input.bb-wrong-guess {
 	function onQuizStateChange$1(state) {
 		if (state.reviewable?.type === "vocab") loadTermAudio(state.reviewable);
 	}
-	var version = "0.4.0";
+	var version = "0.4.1";
 	var PANEL_ID = "bb-settings-panel";
 	var CARD_CLASS = "bb-panel-card relative z-1 flex flex-col overflow-hidden rounded-normal border border-rim bg-secondary-bg text-primary-fg shadow-normal";
 	var CLOSE_SHAPES = "<path d=\"M6 6 18 18M18 6 6 18\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\"/>";
