@@ -1,7 +1,6 @@
 import { fetchStudyQuestions, type StudyQuestion } from '../bunpro/api';
 import type { ReviewableRef } from '../bunpro/quiz-state';
-
-let hasWarned = false;
+import { warnOnce } from '../report';
 
 /**
  * Results are cached per term by `fetchStudyQuestions`, so features can call
@@ -12,10 +11,7 @@ export async function loadSentences(term: ReviewableRef): Promise<StudyQuestion[
   try {
     return await fetchStudyQuestions(term);
   } catch (error) {
-    if (!hasWarned) {
-      hasWarned = true;
-      console.warn('[Better Bunpro] Could not load example sentences:', error);
-    }
+    warnOnce('sentences', 'Could not load example sentences:', error);
     return [];
   }
 }

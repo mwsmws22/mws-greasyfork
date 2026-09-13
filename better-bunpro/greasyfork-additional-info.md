@@ -22,4 +22,8 @@ To give up and see the answer, either clear the box and press **Enter**, or pres
 
 Because a guess this catches never reaches Bunpro, the review is graded on the answer you finally submit.
 
+### Play real speakers instead of TTS audio
+
+When Bunpro would play synthesised audio for a vocabulary term, this plays a recording of a person saying it instead, looked up the same way [Yomitan](https://github.com/yomidevs/yomitan) does (JapanesePod101, then Jisho). Sentence audio is left alone, and a term Bunpro already recorded is left alone. If nobody has recorded the word, the synthesised clip still plays.
+
 Source: [github.com/mwsmws22/mws-greasyfork](https://github.com/mwsmws22/mws-greasyfork/tree/main/better-bunpro)

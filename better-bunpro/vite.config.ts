@@ -14,10 +14,17 @@ export default defineConfig({
         author: 'mwsmws22',
         license: 'MIT',
         description:
-          'Features I wish Bunpro had. Show example sentences for A1+ vocab after a correct answer, cycle sentences with Tab, keep guessing after a wrong answer, and more.',
+          'Features I wish Bunpro had. Show example sentences for A1+ vocab after a correct answer, cycle sentences with Tab, keep guessing after a wrong answer, play real speakers instead of synthesised term audio, and more.',
         // Bunpro routes client-side, so /reviews is often reached without a page
         // load. Every feature activates off the elements it needs being present.
         match: ['https://bunpro.jp/*'],
+        connect: [
+          'assets.languagepod101.com',
+          'www.japanesepod101.com',
+          'cdn.innovativelanguage.com',
+          'jisho.org',
+          'd1vjc5dkcd3yh2.cloudfront.net',
+        ],
         'run-at': 'document-idle',
       },
       build: {

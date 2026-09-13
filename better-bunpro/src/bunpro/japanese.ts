@@ -17,7 +17,13 @@ export const KATAKANA = String.raw`\u30A0-\u30FF\u30FC`;
 export const JAPANESE = `${KANJI}${HIRAGANA}${KATAKANA}`;
 
 const JAPANESE_CHARACTER = new RegExp(`^[${JAPANESE}]$`);
+const KANA_THROUGHOUT = new RegExp(`^[${HIRAGANA}${KATAKANA}]+$`);
 
 export function isJapanese(character: string): boolean {
   return JAPANESE_CHARACTER.test(character);
+}
+
+/** A word written without kanji, which dictionaries file under its spelling alone. */
+export function isEntirelyKana(text: string): boolean {
+  return KANA_THROUGHOUT.test(text);
 }

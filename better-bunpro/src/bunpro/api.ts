@@ -23,19 +23,43 @@ export interface StudyQuestion {
   female_audio_url: string | null;
 }
 
-const inFlight = new Map<string, Promise<StudyQuestion[]>>();
+/** The reviewed item itself: the vocab word or grammar point the quiz is about. */
+export interface Reviewable {
+  title: string | null;
+  /** How the title is read, for an item written with kanji. */
+  kana: string | null;
+  /** Bunpro synthesised this item's audio rather than recording a speaker. */
+  has_tts_audio: boolean;
+  male_audio_url: string | null;
+  female_audio_url: string | null;
+}
 
-export function fetchStudyQuestions(reviewable: ReviewableRef): Promise<StudyQuestion[]> {
+const inFlight = new Map<string, Promise<JsonApiPayload>>();
+
+/**
+ * One request per item answers everything we ask about it, so the readers below
+ * are free to be called as often as a feature likes.
+ */
+function fetchItem(reviewable: ReviewableRef): Promise<JsonApiPayload> {
   const key = `${reviewable.type}:${reviewable.id}`;
   let request = inFlight.get(key);
   if (!request) {
-    request = requestStudyQuestions(reviewable);
+    request = requestItem(reviewable);
     inFlight.set(key, request);
   }
   return request;
 }
 
-async function requestStudyQuestions(reviewable: ReviewableRef): Promise<StudyQuestion[]> {
+export async function fetchStudyQuestions(reviewable: ReviewableRef): Promise<StudyQuestion[]> {
+  return collectStudyQuestions(await fetchItem(reviewable));
+}
+
+export async function fetchReviewable(reviewable: ReviewableRef): Promise<Reviewable | null> {
+  const attributes = (await fetchItem(reviewable)).data?.attributes;
+  return attributes ? (attributes as unknown as Reviewable) : null;
+}
+
+async function requestItem(reviewable: ReviewableRef): Promise<JsonApiPayload> {
   const token = readCookie(TOKEN_COOKIE);
   if (!token) {
     throw new Error(`No ${TOKEN_COOKIE} cookie found; are you signed in to Bunpro?`);
@@ -54,7 +78,7 @@ async function requestStudyQuestions(reviewable: ReviewableRef): Promise<StudyQu
     throw new Error(`${url} responded ${response.status}`);
   }
 
-  return collectStudyQuestions((await response.json()) as JsonApiPayload);
+  return (await response.json()) as JsonApiPayload;
 }
 
 interface JsonApiEntry {
@@ -64,6 +88,7 @@ interface JsonApiEntry {
 }
 
 interface JsonApiPayload {
+  data?: JsonApiEntry;
   included?: JsonApiEntry[];
 }
 

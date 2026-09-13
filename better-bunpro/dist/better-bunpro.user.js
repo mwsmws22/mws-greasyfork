@@ -1,14 +1,20 @@
 // ==UserScript==
 // @name         Better Bunpro
 // @namespace    mwsmws22
-// @version      0.3.0
+// @version      0.4.0
 // @author       mwsmws22
-// @description  Features I wish Bunpro had. Show example sentences for A1+ vocab after a correct answer, cycle sentences with Tab, keep guessing after a wrong answer, and more.
+// @description  Features I wish Bunpro had. Show example sentences for A1+ vocab after a correct answer, cycle sentences with Tab, keep guessing after a wrong answer, play real speakers instead of synthesised term audio, and more.
 // @license      MIT
 // @match        https://bunpro.jp/*
+// @connect      assets.languagepod101.com
+// @connect      www.japanesepod101.com
+// @connect      cdn.innovativelanguage.com
+// @connect      jisho.org
+// @connect      d1vjc5dkcd3yh2.cloudfront.net
 // @grant        GM_getValue
 // @grant        GM_registerMenuCommand
 // @grant        GM_setValue
+// @grant        GM_xmlhttpRequest
 // @run-at       document-idle
 // ==/UserScript==
 
@@ -17,6 +23,7 @@
 	var _GM_getValue = (() => typeof GM_getValue != "undefined" ? GM_getValue : void 0)();
 	var _GM_registerMenuCommand = (() => typeof GM_registerMenuCommand != "undefined" ? GM_registerMenuCommand : void 0)();
 	var _GM_setValue = (() => typeof GM_setValue != "undefined" ? GM_setValue : void 0)();
+	var _GM_xmlhttpRequest = (() => typeof GM_xmlhttpRequest != "undefined" ? GM_xmlhttpRequest : void 0)();
 	var listeners = new Set();
 	function readStored(key, fallback) {
 		const stored = _GM_getValue(key, void 0);
@@ -193,16 +200,23 @@
 	var TOKEN_COOKIE = "frontend_api_token";
 	var LOCALE_COOKIE = "locale";
 	var inFlight = new Map();
-	function fetchStudyQuestions(reviewable) {
+	function fetchItem(reviewable) {
 		const key = `${reviewable.type}:${reviewable.id}`;
 		let request = inFlight.get(key);
 		if (!request) {
-			request = requestStudyQuestions(reviewable);
+			request = requestItem(reviewable);
 			inFlight.set(key, request);
 		}
 		return request;
 	}
-	async function requestStudyQuestions(reviewable) {
+	async function fetchStudyQuestions(reviewable) {
+		return collectStudyQuestions(await fetchItem(reviewable));
+	}
+	async function fetchReviewable(reviewable) {
+		const attributes = (await fetchItem(reviewable)).data?.attributes;
+		return attributes ? attributes : null;
+	}
+	async function requestItem(reviewable) {
 		const token = readCookie(TOKEN_COOKIE);
 		if (!token) throw new Error(`No ${TOKEN_COOKIE} cookie found; are you signed in to Bunpro?`);
 		const locale = readCookie(LOCALE_COOKIE) ?? "en";
@@ -215,7 +229,7 @@
 			}
 		});
 		if (!response.ok) throw new Error(`${url} responded ${response.status}`);
-		return collectStudyQuestions(await response.json());
+		return await response.json();
 	}
 	function collectStudyQuestions(payload) {
 		const sentences = [];
@@ -243,15 +257,17 @@
 		}
 		return null;
 	}
-	var hasWarned = false;
+	var reported = new Set();
+	function warnOnce(topic, message, error) {
+		if (reported.has(topic)) return;
+		reported.add(topic);
+		console.warn(`[Better Bunpro] ${message}`, error);
+	}
 	async function loadSentences(term) {
 		try {
 			return await fetchStudyQuestions(term);
 		} catch (error) {
-			if (!hasWarned) {
-				hasWarned = true;
-				console.warn("[Better Bunpro] Could not load example sentences:", error);
-			}
+			warnOnce("sentences", "Could not load example sentences:", error);
 			return [];
 		}
 	}
@@ -275,10 +291,15 @@
 	}
 	var KANJI = `${String.raw`\u2E80-\u2E99\u2E9B-\u2EF3\u2F00-\u2FD5`}${String.raw`\u3005\u3007\u3021-\u3029\u3038-\u303B`}${String.raw`\u3400-\u4DBF\u4E00-\u9FFF`}${String.raw`\uF900-\uFA6D\uFA70-\uFAD9`}`;
 	var HIRAGANA = String.raw`\u3041-\u3096\u309D-\u309F`;
-	var JAPANESE = `${KANJI}${HIRAGANA}${String.raw`\u30A0-\u30FF\u30FC`}`;
+	var KATAKANA = String.raw`\u30A0-\u30FF\u30FC`;
+	var JAPANESE = `${KANJI}${HIRAGANA}${KATAKANA}`;
 	var JAPANESE_CHARACTER = new RegExp(`^[${JAPANESE}]$`);
+	var KANA_THROUGHOUT = new RegExp(`^[${HIRAGANA}${KATAKANA}]+$`);
 	function isJapanese(character) {
 		return JAPANESE_CHARACTER.test(character);
+	}
+	function isEntirelyKana(text) {
+		return KANA_THROUGHOUT.test(text);
 	}
 	var ANNOTATABLE = `${KANJI}\\u30F6`;
 	var FULL_WIDTH_DIGITS = String.raw`\uFF10-\uFF19`;
@@ -626,7 +647,7 @@ input.bb-wrong-guess {
 		if (!term || !state.isRevealing || !state.isCorrect || hasNativeSentence) return null;
 		return term;
 	}
-	var stopWatchingQuiz$1 = null;
+	var stopWatchingQuiz$2 = null;
 	var exampleSentenceFeature = {
 		id: "example-sentence",
 		title: "Show unverified example sentences for A1+ vocab",
@@ -634,15 +655,15 @@ input.bb-wrong-guess {
 		enabledByDefault: true,
 		start() {
 			injectStyles();
-			stopWatchingQuiz$1 = watchQuizState(onQuizStateChange$1);
+			stopWatchingQuiz$2 = watchQuizState(onQuizStateChange$2);
 		},
 		stop() {
-			stopWatchingQuiz$1?.();
-			stopWatchingQuiz$1 = null;
+			stopWatchingQuiz$2?.();
+			stopWatchingQuiz$2 = null;
 			clearSentence();
 		}
 	};
-	function onQuizStateChange$1(state) {
+	function onQuizStateChange$2(state) {
 		dropSentenceUnless(solvedReviewKey(state));
 		const upcoming = termToPrefetch(state);
 		if (upcoming) loadSentences(upcoming);
@@ -661,7 +682,263 @@ input.bb-wrong-guess {
 			index: pickSentenceIndex(termKey(term), sessionId, sentences.length)
 		});
 	}
-	var version = "0.3.0";
+	var TIMEOUT_MS = 8e3;
+	function requestText(request) {
+		return send(request, "text");
+	}
+	function requestBlob(request) {
+		return send(request, "blob");
+	}
+	function send({ url, method = "GET", headers, body }, responseType) {
+		return new Promise((resolve, reject) => {
+			_GM_xmlhttpRequest({
+				url,
+				method,
+				headers,
+				data: body,
+				responseType,
+				anonymous: true,
+				timeout: TIMEOUT_MS,
+				onload: (response) => {
+					if (response.status < 200 || response.status >= 300) {
+						reject(new Error(`${url} responded ${response.status}`));
+						return;
+					}
+					resolve(response.response);
+				},
+				onerror: () => reject(new Error(`${url} could not be reached`)),
+				ontimeout: () => reject(new Error(`${url} took longer than ${TIMEOUT_MS}ms`))
+			});
+		});
+	}
+	function parsePage(html) {
+		return new DOMParser().parseFromString(html, "text/html");
+	}
+	function isSameWord({ term, reading }, entryReading) {
+		const kana = entryReading?.trim() ?? "";
+		if (kana === "") return false;
+		return reading === term || reading === kana;
+	}
+	function clipId({ term, reading }) {
+		return `audio_${term}:${reading}`;
+	}
+	var ENDPOINT$1 = "https://www.japanesepod101.com/learningcenter/reference/dictionary_post";
+	var japanesePod101Dictionary = {
+		name: "JapanesePod101 dictionary",
+		async find(word) {
+			return recordingsIn$1(parsePage(await requestText(searchFor(word))), word);
+		}
+	};
+	function searchFor({ term }) {
+		return {
+			url: ENDPOINT$1,
+			method: "POST",
+			headers: { "Content-Type": "application/x-www-form-urlencoded" },
+			body: new URLSearchParams({
+				post: "dictionary_reference",
+				match_type: "exact",
+				search_query: term,
+				vulgar: "true"
+			}).toString()
+		};
+	}
+	function recordingsIn$1(page, word) {
+		const urls = new Set();
+		for (const row of page.querySelectorAll(".dc-result-row")) {
+			const url = row.querySelector("audio source")?.getAttribute("src");
+			if (url && isSameWord(word, row.querySelector(".dc-vocab_kana")?.textContent)) urls.add(new URL(url, ENDPOINT$1).href);
+		}
+		return [...urls];
+	}
+	var SEARCH = "https://jisho.org/search/";
+	var jisho = {
+		name: "Jisho",
+		async find(word) {
+			return recordingsIn(parsePage(await requestText({ url: SEARCH + encodeURIComponent(word.term) })), word);
+		}
+	};
+	function recordingsIn(page, word) {
+		const url = page.getElementById(clipId(word))?.querySelector("source")?.getAttribute("src");
+		return url ? [new URL(url, SEARCH).href] : [];
+	}
+	var ENDPOINT = "https://assets.languagepod101.com/dictionary/japanese/audiomp3.php";
+	var jpod101 = {
+		name: "JapanesePod101",
+		placeholderDigest: "ae6398b5a27bc8c0a771df6c907ade794be15518174773c58c7c7ddd17098906",
+		async find(word) {
+			return [jpod101Url(word)];
+		}
+	};
+	function jpod101Url({ term, reading }) {
+		const query = new URLSearchParams();
+		if (term !== "" && !(term === reading && isEntirelyKana(term))) query.set("kanji", term);
+		if (reading !== "") query.set("kana", reading);
+		return `${ENDPOINT}?${query}`;
+	}
+	var AUDIO_SOURCES = [
+		jpod101,
+		japanesePod101Dictionary,
+		jisho
+	];
+	async function findRecording(word) {
+		for (const source of AUDIO_SOURCES) {
+			const recording = await recordingFrom(source, word);
+			if (recording) return recording;
+		}
+		return null;
+	}
+	async function recordingFrom(source, word) {
+		try {
+			for (const url of await source.find(word)) {
+				const clip = await requestBlob({ url });
+				if (!await isPlaceholder(clip, source)) return URL.createObjectURL(clip);
+			}
+		} catch (error) {
+			warnOnce(`audio-source:${source.name}`, `Could not reach ${source.name} for audio:`, error);
+		}
+		return null;
+	}
+	async function isPlaceholder(clip, source) {
+		return source.placeholderDigest !== void 0 && await sha256(clip) === source.placeholderDigest;
+	}
+	async function sha256(clip) {
+		const digest = await crypto.subtle.digest("SHA-256", await clip.arrayBuffer());
+		return [...new Uint8Array(digest)].map((byte) => byte.toString(16).padStart(2, "0")).join("");
+	}
+	var recordings = new Map();
+	function remember(ttsUrls, recording) {
+		for (const url of ttsUrls) recordings.set(canonicalAudioUrl(url), recording);
+	}
+	function replacementFor(ttsUrl) {
+		return recordings.get(canonicalAudioUrl(ttsUrl)) ?? null;
+	}
+	function urlToPlay(requested) {
+		return replacementFor(requested) ?? requested;
+	}
+	function forget(ttsUrls) {
+		for (const url of ttsUrls) recordings.delete(canonicalAudioUrl(url));
+	}
+	function forgetAll() {
+		recordings.clear();
+	}
+	function canonicalAudioUrl(url) {
+		try {
+			return decodeURI(url);
+		} catch {
+			return url;
+		}
+	}
+	var lookups = new Map();
+	var REMEMBERED = 50;
+	async function findReplacement(audio) {
+		const word = `${audio.term}|${audio.reading}`;
+		let lookup = lookups.get(word);
+		if (!lookup) {
+			lookup = {
+				ttsUrls: audio.ttsUrls,
+				recording: findRecording(audio)
+			};
+			lookups.set(word, lookup);
+			forgetOldest();
+		}
+		const recording = await lookup.recording;
+		if (recording !== null && lookups.get(word) === lookup) remember(lookup.ttsUrls, recording);
+	}
+	function forgetReplacements() {
+		for (const lookup of lookups.values()) lookup.recording.then(revoke);
+		lookups.clear();
+		forgetAll();
+	}
+	function forgetOldest() {
+		for (const [word, lookup] of lookups) {
+			if (lookups.size <= REMEMBERED) return;
+			lookups.delete(word);
+			forget(lookup.ttsUrls);
+			lookup.recording.then(revoke);
+		}
+	}
+	function revoke(recording) {
+		if (recording !== null) URL.revokeObjectURL(recording);
+	}
+	function synthesisedTermAudio(item) {
+		if (!item.has_tts_audio || !item.title) return null;
+		const ttsUrls = [item.male_audio_url, item.female_audio_url].filter((url) => url !== null && url !== "");
+		if (ttsUrls.length === 0) return null;
+		return {
+			term: item.title,
+			reading: item.kana || item.title,
+			ttsUrls: ttsUrls.map(canonicalAudioUrl)
+		};
+	}
+	async function loadTermAudio(term) {
+		try {
+			const item = await fetchReviewable(term);
+			const audio = item ? synthesisedTermAudio(item) : null;
+			if (audio) await findReplacement(audio);
+		} catch (error) {
+			warnOnce("term-audio", "Could not replace synthesised term audio:", error);
+		}
+	}
+	var nativeSrc = null;
+	var nativePlay = null;
+	function startReplacingAudio() {
+		if (nativeSrc) return;
+		const src = Object.getOwnPropertyDescriptor(HTMLMediaElement.prototype, "src");
+		if (!src?.get || !src.set) throw new Error("HTMLMediaElement.src is not configurable; term audio cannot be replaced");
+		nativeSrc = {
+			get: src.get,
+			set: src.set
+		};
+		nativePlay = HTMLMediaElement.prototype.play;
+		Object.defineProperty(HTMLMediaElement.prototype, "src", {
+			configurable: true,
+			enumerable: true,
+			get() {
+				return nativeSrc?.get.call(this) ?? "";
+			},
+			set(url) {
+				nativeSrc?.set.call(this, urlToPlay(url));
+			}
+		});
+		HTMLMediaElement.prototype.play = function playReplaced() {
+			const replacement = replacementFor(this.src);
+			if (replacement !== null && this.src !== replacement) this.src = replacement;
+			return nativePlay?.call(this) ?? Promise.resolve();
+		};
+	}
+	function stopReplacingAudio() {
+		if (!nativeSrc || !nativePlay) return;
+		Object.defineProperty(HTMLMediaElement.prototype, "src", {
+			configurable: true,
+			enumerable: true,
+			get: nativeSrc.get,
+			set: nativeSrc.set
+		});
+		HTMLMediaElement.prototype.play = nativePlay;
+		nativeSrc = null;
+		nativePlay = null;
+	}
+	var stopWatchingQuiz$1 = null;
+	var humanTermAudioFeature = {
+		id: "human-term-audio",
+		title: "Play real speakers instead of synthesised term audio",
+		description: "When Bunpro would play synthesised audio for a vocabulary term, play a recording of a person saying it instead, looked up the same way Yomitan does (JapanesePod101, then Jisho). Sentence audio is left alone, and a term Bunpro already recorded is left alone. If nobody has recorded the word, the synthesised clip still plays.",
+		enabledByDefault: true,
+		start() {
+			startReplacingAudio();
+			stopWatchingQuiz$1 = watchQuizState(onQuizStateChange$1);
+		},
+		stop() {
+			stopWatchingQuiz$1?.();
+			stopWatchingQuiz$1 = null;
+			stopReplacingAudio();
+			forgetReplacements();
+		}
+	};
+	function onQuizStateChange$1(state) {
+		if (state.reviewable?.type === "vocab") loadTermAudio(state.reviewable);
+	}
+	var version = "0.4.0";
 	var PANEL_ID = "bb-settings-panel";
 	var CARD_CLASS = "bb-panel-card relative z-1 flex flex-col overflow-hidden rounded-normal border border-rim bg-secondary-bg text-primary-fg shadow-normal";
 	var CLOSE_SHAPES = "<path d=\"M6 6 18 18M18 6 6 18\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\"/>";
@@ -1031,6 +1308,7 @@ input.bb-wrong-guess {
 	registerFeature(exampleSentenceFeature);
 	registerFeature(sentenceCycleFeature);
 	registerFeature(keepGuessingFeature);
+	registerFeature(humanTermAudioFeature);
 	mountSettingsLaunchers();
 	startEnabledFeatures();
 })();
