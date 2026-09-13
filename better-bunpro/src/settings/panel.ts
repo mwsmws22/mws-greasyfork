@@ -8,6 +8,7 @@ import {
   type FeatureCredit,
 } from '../features/registry';
 import { injectStyles } from '../styles';
+import { claimKeystrokes } from '../ui/keystrokes';
 
 const PANEL_ID = 'bb-settings-panel';
 const CARD_CLASS =
@@ -18,23 +19,23 @@ const CLOSE_SHAPES =
 const CARET_SHAPES =
   '<path d="M9.29 6.71a1 1 0 0 0 0 1.41L13.17 12l-3.88 3.88a1 1 0 1 0 1.41 1.41l4.59-4.59a1 1 0 0 0 0-1.41L10.7 6.7a1 1 0 0 0-1.41.01" fill="currentColor"/>';
 
-export function isSettingsPanelOpen(): boolean {
-  return document.getElementById(PANEL_ID) !== null;
-}
+let releaseKeystrokes: (() => void) | null = null;
 
 export function toggleSettingsPanel(): void {
-  const open = document.getElementById(PANEL_ID);
-  if (open) {
-    open.remove();
+  if (document.getElementById(PANEL_ID)) {
+    closePanel();
     return;
   }
   injectStyles();
   const panel = buildPanel();
   document.body.append(panel);
+  releaseKeystrokes = claimKeystrokes(panel, closePanel);
   panel.querySelector<HTMLElement>('.bb-panel-card')?.focus();
 }
 
 function closePanel(): void {
+  releaseKeystrokes?.();
+  releaseKeystrokes = null;
   document.getElementById(PANEL_ID)?.remove();
 }
 
@@ -60,14 +61,6 @@ function buildPanel(): HTMLElement {
     },
     [backdrop, card],
   );
-
-  /** Keep our keystrokes away from Bunpro's quiz hotkeys and answer input. */
-  panel.addEventListener('keydown', (event) => {
-    event.stopPropagation();
-    if (event.key === 'Escape') {
-      closePanel();
-    }
-  });
 
   return panel;
 }
