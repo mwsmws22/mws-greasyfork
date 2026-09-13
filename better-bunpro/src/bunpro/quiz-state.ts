@@ -20,6 +20,8 @@ export interface QuizState {
   inputMode: string | null;
   /** Every answer Bunpro would accept for the question on screen. */
   answers: string[];
+  /** The text just submitted; Bunpro keeps this on `data-meta-input`. */
+  submittedAnswer: string | null;
   /** The question has been answered, whether or not the answer is on screen yet. */
   isPostAttempt: boolean;
   isRevealing: boolean;
@@ -32,6 +34,7 @@ const NO_QUIZ: QuizState = {
   questionMode: null,
   inputMode: null,
   answers: [],
+  submittedAnswer: null,
   isPostAttempt: false,
   isRevealing: false,
   isCorrect: false,
@@ -48,6 +51,7 @@ export function readQuizState(): QuizState {
     questionMode: element.getAttribute('data-meta-question-mode'),
     inputMode: element.getAttribute('data-meta-input-mode'),
     answers: parseAnswers(element.getAttribute('data-meta-answers-array')),
+    submittedAnswer: parseSubmitted(element.getAttribute('data-meta-input')),
     isPostAttempt: element.getAttribute('data-meta-is-post-attempt') === 'true',
     isRevealing: element.getAttribute('data-meta-is-revealing') === 'true',
     isCorrect: element.getAttribute('data-meta-is-correct') === 'true',
@@ -92,6 +96,13 @@ export function watchQuizState(onChange: (state: QuizState) => void): () => void
     treeObserver.disconnect();
     attributeObserver?.disconnect();
   };
+}
+
+function parseSubmitted(raw: string | null): string | null {
+  if (!raw || raw === 'null') {
+    return null;
+  }
+  return raw;
 }
 
 function parseAnswers(raw: string | null): string[] {

@@ -56,3 +56,12 @@ export function includesSynonym(synonyms: readonly string[], candidate: string):
   const wanted = normalize(candidate);
   return synonyms.some((synonym) => normalize(synonym) === wanted);
 }
+
+/** A guess that is empty, already accepted, or too long is not a synonym to add. */
+export function synonymWorthAdding(submitted: string, accepted: readonly string[]): boolean {
+  const trimmed = submitted.trim();
+  if (trimmed === '' || trimmed.length > SYNONYM_MAX_LENGTH) {
+    return false;
+  }
+  return !includesSynonym(accepted, trimmed);
+}

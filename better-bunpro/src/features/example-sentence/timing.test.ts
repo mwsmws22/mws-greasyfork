@@ -8,6 +8,7 @@ const vocab: QuizState = {
   questionMode: 'translate',
   inputMode: 'manual',
   answers: ['to have guts'],
+  submittedAnswer: null,
   isPostAttempt: false,
   isRevealing: false,
   isCorrect: false,
