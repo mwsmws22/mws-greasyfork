@@ -103,6 +103,9 @@
 	function findAnswerConsole() {
 		return document.querySelector(".InputManual");
 	}
+	function findQuizConsole() {
+		return document.querySelector(`${QUIZ_ARTICLE} .bp-quiz-console`);
+	}
 	function findQuizToolbar() {
 		const rows = document.querySelectorAll(`${QUIZ_ARTICLE} > header ul`);
 		for (const row of rows) if (row.querySelector("button, a")) return row;
@@ -115,6 +118,7 @@
 		questionMode: null,
 		inputMode: null,
 		answers: [],
+		submittedAnswer: null,
 		isPostAttempt: false,
 		isRevealing: false,
 		isCorrect: false
@@ -128,6 +132,7 @@
 			questionMode: element.getAttribute("data-meta-question-mode"),
 			inputMode: element.getAttribute("data-meta-input-mode"),
 			answers: parseAnswers(element.getAttribute("data-meta-answers-array")),
+			submittedAnswer: parseSubmitted(element.getAttribute("data-meta-input")),
 			isPostAttempt: element.getAttribute("data-meta-is-post-attempt") === "true",
 			isRevealing: element.getAttribute("data-meta-is-revealing") === "true",
 			isCorrect: element.getAttribute("data-meta-is-correct") === "true"
@@ -166,6 +171,10 @@
 			attributeObserver?.disconnect();
 		};
 	}
+	function parseSubmitted(raw) {
+		if (!raw || raw === "null") return null;
+		return raw;
+	}
 	function parseAnswers(raw) {
 		if (!raw || raw === "null") return [];
 		try {
@@ -196,9 +205,383 @@
 		const { reviewable, sessionId } = state;
 		return reviewable && sessionId ? `${termKey(reviewable)}@${sessionId}` : null;
 	}
+	var KANJI = `${String.raw`\u2E80-\u2E99\u2E9B-\u2EF3\u2F00-\u2FD5`}${String.raw`\u3005\u3007\u3021-\u3029\u3038-\u303B`}${String.raw`\u3400-\u4DBF\u4E00-\u9FFF`}${String.raw`\uF900-\uFA6D\uFA70-\uFAD9`}`;
+	var HIRAGANA = String.raw`\u3041-\u3096\u309D-\u309F`;
+	var KATAKANA = String.raw`\u30A0-\u30FF\u30FC`;
+	var JAPANESE = `${KANJI}${HIRAGANA}${KATAKANA}`;
+	var JAPANESE_CHARACTER = new RegExp(`^[${JAPANESE}]$`);
+	var KANA_THROUGHOUT = new RegExp(`^[${HIRAGANA}${KATAKANA}]+$`);
+	function isJapanese(character) {
+		return JAPANESE_CHARACTER.test(character);
+	}
+	function isEntirelyKana(text) {
+		return KANA_THROUGHOUT.test(text);
+	}
+	var LIGATURES = {
+		æ: "ae",
+		œ: "oe",
+		ß: "ss"
+	};
+	function normalize(text) {
+		return [...text.toLowerCase()].map(foldLetter).join("").trim();
+	}
+	function foldLetter(letter) {
+		if (isJapanese(letter)) return letter;
+		return (LIGATURES[letter] ?? letter).normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+	}
 	var API_BASE = "https://api.bunpro.jp/api/frontend";
 	var TOKEN_COOKIE = "frontend_api_token";
 	var LOCALE_COOKIE = "locale";
+	var JSON_HEADERS = {
+		Accept: "application/json",
+		"Content-Type": "application/json"
+	};
+	async function bunproRequest(path, init = {}) {
+		const token = readCookie(TOKEN_COOKIE);
+		if (!token) throw new Error(`No ${TOKEN_COOKIE} cookie found; are you signed in to Bunpro?`);
+		const response = await fetch(`${API_BASE}${path}`, {
+			...init,
+			credentials: "omit",
+			headers: {
+				Accept: "application/json",
+				Authorization: `Token token=${token}`,
+				...init.headers
+			}
+		});
+		const payload = isJson(response) ? await response.json() : null;
+		if (!response.ok) throw new Error(`${path} responded ${response.status}: ${describeErrors(payload, response)}`);
+		return payload;
+	}
+	function jsonBody(method, body) {
+		return {
+			method,
+			headers: JSON_HEADERS,
+			body: JSON.stringify(body)
+		};
+	}
+	function bunproLocale() {
+		return readCookie(LOCALE_COOKIE) ?? "en";
+	}
+	function attributesOf(document) {
+		const record = Array.isArray(document?.data) ? document.data[0] : document?.data;
+		return record?.attributes ? withRecordId(record) : null;
+	}
+	function includedOfType(document, type) {
+		return recordsOfType(document?.included, type);
+	}
+	function dataOfType(document, type) {
+		const data = document?.data;
+		return recordsOfType(Array.isArray(data) ? data : data ? [data] : [], type);
+	}
+	function recordsOfType(records, type) {
+		const matching = [];
+		for (const record of records ?? []) if (record.type === type && record.attributes) matching.push(withRecordId(record));
+		return matching;
+	}
+	function withRecordId(record) {
+		const attributes = record.attributes ?? {};
+		if (typeof attributes.id === "number") return attributes;
+		return {
+			...attributes,
+			id: Number(record.id)
+		};
+	}
+	function describeErrors(payload, response) {
+		const described = (payload?.errors ?? []).map((error) => error.detail ?? error.code ?? "").filter((text) => text !== "").join(", ");
+		return described === "" ? response.statusText : described;
+	}
+	function isJson(response) {
+		return response.headers.get("Content-Type")?.includes("application/json") === true;
+	}
+	function readCookie(name) {
+		for (const pair of document.cookie.split(";")) {
+			const separator = pair.indexOf("=");
+			if (separator === -1) continue;
+			if (pair.slice(0, separator).trim() !== name) continue;
+			const value = decodeURIComponent(pair.slice(separator + 1)).trim();
+			return value === "" ? null : value;
+		}
+		return null;
+	}
+	var PASCAL_TYPE = {
+		vocab: "Vocab",
+		grammar_point: "GrammarPoint"
+	};
+	async function reviewOf(term) {
+		const reviews = dataOfType(await bunproRequest("/reviews/hydrate_reviewables", jsonBody("POST", { reviewables: [reviewableTuple(term)] })), "review");
+		return reviews.find((review) => review.reviewable_id === term.id) ?? reviews[0] ?? null;
+	}
+	function reviewableTuple(term) {
+		return [PASCAL_TYPE[term.type], term.id];
+	}
+	async function addUserSynonym(vocabId, synonym) {
+		const existing = parseSynonyms((await reviewOf({
+			id: vocabId,
+			type: "vocab"
+		}))?.user_synonyms);
+		if (includesSynonym(existing, synonym)) return "already-there";
+		await saveUserSynonyms(vocabId, [...existing, synonym.trim()]);
+		return "added";
+	}
+	async function saveUserSynonyms(vocabId, synonyms) {
+		await bunproRequest(`/reviews/vocab/${vocabId}/manage_user_synonyms`, jsonBody("POST", { user_synonyms: serializeSynonyms(synonyms) }));
+	}
+	function parseSynonyms(stored) {
+		if (typeof stored !== "string") return [];
+		return stored.split(",").map((synonym) => synonym.trim()).filter((synonym) => synonym !== "");
+	}
+	function serializeSynonyms(synonyms) {
+		const kept = new Set();
+		for (const synonym of synonyms) {
+			const trimmed = synonym.trim();
+			if (trimmed !== "" && trimmed.length <= 38) kept.add(trimmed);
+		}
+		return [...kept].join(",");
+	}
+	function includesSynonym(synonyms, candidate) {
+		const wanted = normalize(candidate);
+		return synonyms.some((synonym) => normalize(synonym) === wanted);
+	}
+	function synonymWorthAdding(submitted, accepted) {
+		const trimmed = submitted.trim();
+		if (trimmed === "" || trimmed.length > 38) return false;
+		return !includesSynonym(accepted, trimmed);
+	}
+	var SVG_NAMESPACE = "http://www.w3.org/2000/svg";
+	function element(tag, attributes = {}, children = []) {
+		const node = document.createElement(tag);
+		for (const [name, value] of Object.entries(attributes)) node.setAttribute(name, value);
+		node.append(...children);
+		return node;
+	}
+	function svgIcon(className, shapes) {
+		const node = document.createElementNS(SVG_NAMESPACE, "svg");
+		node.setAttribute("viewBox", "0 0 24 24");
+		node.setAttribute("class", className);
+		node.setAttribute("aria-hidden", "true");
+		node.innerHTML = shapes;
+		return node;
+	}
+	var STYLE_ID = "bb-styles";
+	var CSS = `
+.bb-sentence-slot {
+  min-width: min(100%, 31.25rem);
+  margin-top: 1.5rem;
+}
+@media (min-width: 640px) {
+  .bb-sentence-slot {
+    min-width: max(fit-content, 31.25rem);
+    margin-top: 2rem;
+  }
+}
+.bb-backdrop {
+  background: rgb(0 0 0 / 0.5);
+}
+.bb-panel-card {
+  width: min(100%, 34rem);
+  max-height: min(80dvh, 40rem);
+}
+.bb-switch {
+  position: relative;
+  flex-shrink: 0;
+  width: 2.75rem;
+  height: 1.5rem;
+  border-radius: 9999px;
+  transition: background-color 150ms ease;
+}
+.bb-switch::after {
+  content: '';
+  position: absolute;
+  top: 0.1875rem;
+  left: 0.1875rem;
+  width: 1.125rem;
+  height: 1.125rem;
+  border-radius: 9999px;
+  background: rgb(var(--c-primary-bg) / 1);
+  transition: transform 150ms ease;
+}
+.bb-switch[aria-checked='true']::after {
+  transform: translateX(1.25rem);
+}
+.bb-feature-copy {
+  display: grid;
+  gap: 0.5rem;
+  min-width: 0;
+}
+.bb-feature-about {
+  min-width: 0;
+}
+.bb-feature-about-summary {
+  display: flex;
+  align-items: center;
+  gap: 0.5em;
+  cursor: pointer;
+  list-style: none;
+  user-select: none;
+}
+.bb-feature-about-summary::-webkit-details-marker {
+  display: none;
+}
+.bb-feature-caret {
+  flex-shrink: 0;
+  width: 1.125em;
+  height: 1.125em;
+  color: rgb(var(--c-primary-accent) / 1);
+  transition: transform 120ms ease;
+}
+.bb-feature-about[open] > .bb-feature-about-summary > .bb-feature-caret {
+  transform: rotate(90deg);
+}
+.bb-feature-desc {
+  margin-top: 0.5rem;
+}
+.bb-add-synonym {
+  width: min(100%, 36rem);
+  margin: 0 auto;
+  padding: 0 0.375rem 0.5rem;
+}
+.bb-popover {
+  width: max-content;
+  max-width: min(20rem, calc(100vw - 1rem));
+}
+.bb-popover-term {
+  line-height: 1.6;
+}
+/** A word in a sentence that can be looked up, hinted at only on hover. */
+.bb-lookup-target {
+  cursor: pointer;
+}
+/**
+ * The element is named in the selector to outweigh the \`text-primary-fg\` Bunpro
+ * leaves on the field: Bunpro's stylesheets are linked after this one, so an
+ * equally specific rule of ours would lose.
+ */
+input.bb-wrong-guess {
+  color: rgb(var(--c-incorrect) / 1);
+}
+.bb-shaking {
+  animation: bb-shake 320ms ease;
+}
+@keyframes bb-shake {
+  0%, 100% { transform: translateX(0); }
+  20% { transform: translateX(-0.375rem); }
+  40% { transform: translateX(0.375rem); }
+  60% { transform: translateX(-0.25rem); }
+  80% { transform: translateX(0.125rem); }
+}
+`;
+	function injectStyles() {
+		if (document.getElementById(STYLE_ID)) return;
+		const style = document.createElement("style");
+		style.id = STYLE_ID;
+		style.textContent = CSS;
+		document.head.append(style);
+	}
+	var BASE_CLASS = "flex w-full items-center justify-center gap-4 rounded-normal border px-12 py-6 text-extra-small md:text-body font-normal transition-colors";
+	var STATE_CLASS = {
+		idle: "border-rim bg-secondary-bg text-primary-fg",
+		working: "border-rim bg-secondary-bg text-tertiary-fg",
+		done: "border-rim bg-secondary-bg text-correct",
+		failed: "border-rim bg-secondary-bg text-error"
+	};
+	function buildActionButton(options) {
+		const label = element("span", { class: "text-left" });
+		const button = element("button", { type: "button" }, options.icon ? [svgIcon("h-24 w-24 shrink-0", options.icon), label] : [label]);
+		let state = options.startAs === "done" ? "done" : "idle";
+		let message = null;
+		const paint = () => {
+			button.className = `${BASE_CLASS} ${STATE_CLASS[state]}`;
+			label.textContent = message ?? options.labels[state];
+			button.disabled = state === "working" || state === "done";
+		};
+		button.addEventListener("click", () => {
+			if (state === "working" || state === "done") return;
+			state = "working";
+			message = null;
+			paint();
+			options.run().then((outcome) => {
+				state = "done";
+				message = typeof outcome === "string" ? outcome : null;
+				paint();
+			}, (error) => {
+				console.warn("[Better Bunpro]", options.labels.failed, error);
+				state = "failed";
+				message = null;
+				paint();
+			});
+		});
+		paint();
+		return button;
+	}
+	function shouldOfferSynonym(state) {
+		return state.reviewable?.type === "vocab" && state.inputMode === "manual" && state.questionMode === "translate" && state.isPostAttempt && !state.isCorrect && synonymWorthAdding(state.submittedAnswer ?? "", state.answers);
+	}
+	var SLOT_ID = "bb-add-synonym";
+	var PLUS_SHAPES = "<path d=\"M12 5v14M5 12h14\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\"/>";
+	var stopWatchingQuiz$3 = null;
+	var remountObserver = null;
+	var addedFor = null;
+	var addSynonymFeature = {
+		id: "add-synonym",
+		title: "Add a wrong answer as a synonym",
+		description: "After you miss a vocab translation, Bunpro hides \"Your Synonyms\" down in More Info. With this on, an Add as synonym button sits next to the wrong answer so you can accept what you typed without scrolling. The guess is saved through the same request Bunpro's own synonym field uses, and a guess it already accepts is not offered again.",
+		enabledByDefault: true,
+		start() {
+			injectStyles();
+			stopWatchingQuiz$3 = watchQuizState(syncButton);
+			remountObserver = new MutationObserver(() => syncButton(readQuizState()));
+			remountObserver.observe(document.body, {
+				childList: true,
+				subtree: true
+			});
+		},
+		stop() {
+			stopWatchingQuiz$3?.();
+			stopWatchingQuiz$3 = null;
+			remountObserver?.disconnect();
+			remountObserver = null;
+			removeButton();
+			addedFor = null;
+		}
+	};
+	function syncButton(state) {
+		if (!shouldOfferSynonym(state) || !findQuizArticle()) {
+			removeButton();
+			return;
+		}
+		if (document.getElementById(SLOT_ID)) return;
+		const console = findQuizConsole();
+		if (!console) return;
+		console.before(buildSlot(state));
+	}
+	function buildSlot(state) {
+		const review = reviewKey(state);
+		const vocabId = state.reviewable?.id;
+		const synonym = state.submittedAnswer?.trim() ?? "";
+		const button = buildActionButton({
+			labels: {
+				idle: "Add as synonym",
+				working: "Adding…",
+				done: "Added as synonym",
+				failed: "Could not add synonym"
+			},
+			icon: PLUS_SHAPES,
+			startAs: review !== null && addedFor === review ? "done" : "idle",
+			run: async () => {
+				if (vocabId === void 0) throw new Error("No vocab id on the current review");
+				const outcome = await addUserSynonym(vocabId, synonym);
+				addedFor = review;
+				return outcome === "already-there" ? "Already a synonym" : void 0;
+			}
+		});
+		return element("div", {
+			id: SLOT_ID,
+			class: "bb-add-synonym"
+		}, [button]);
+	}
+	function removeButton() {
+		document.getElementById(SLOT_ID)?.remove();
+	}
 	var inFlight = new Map();
 	function fetchItem(reviewable) {
 		const key = `${reviewable.type}:${reviewable.id}`;
@@ -213,49 +596,22 @@
 		return collectStudyQuestions(await fetchItem(reviewable));
 	}
 	async function fetchReviewable(reviewable) {
-		const attributes = (await fetchItem(reviewable)).data?.attributes;
+		const attributes = attributesOf(await fetchItem(reviewable));
 		return attributes ? attributes : null;
 	}
 	async function requestItem(reviewable) {
-		const token = readCookie(TOKEN_COOKIE);
-		if (!token) throw new Error(`No ${TOKEN_COOKIE} cookie found; are you signed in to Bunpro?`);
-		const locale = readCookie(LOCALE_COOKIE) ?? "en";
-		const url = `${API_BASE}/reviewables/${reviewable.type}/${reviewable.id}?locale=${locale}`;
-		const response = await fetch(url, {
-			credentials: "omit",
-			headers: {
-				Accept: "application/json",
-				Authorization: `Token token=${token}`
-			}
-		});
-		if (!response.ok) throw new Error(`${url} responded ${response.status}`);
-		return await response.json();
+		return bunproRequest(`/reviewables/${reviewable.type}/${reviewable.id}?locale=${bunproLocale()}`);
 	}
 	function collectStudyQuestions(payload) {
 		const sentences = [];
-		for (const entry of payload.included ?? []) {
-			if (entry.type !== "study_question" || !entry.attributes) continue;
-			const attributes = entry.attributes;
+		for (const attributes of includedOfType(payload, "study_question")) {
 			if (typeof attributes.content !== "string") continue;
-			sentences.push({
-				...attributes,
-				id: typeof attributes.id === "number" ? attributes.id : Number(entry.id)
-			});
+			sentences.push(attributes);
 		}
 		return sentences.sort(bySentenceOrder);
 	}
 	function bySentenceOrder(left, right) {
 		return (left.sentence_order ?? Number.MAX_SAFE_INTEGER) - (right.sentence_order ?? Number.MAX_SAFE_INTEGER);
-	}
-	function readCookie(name) {
-		for (const pair of document.cookie.split(";")) {
-			const separator = pair.indexOf("=");
-			if (separator === -1) continue;
-			if (pair.slice(0, separator).trim() !== name) continue;
-			const value = decodeURIComponent(pair.slice(separator + 1)).trim();
-			return value === "" ? null : value;
-		}
-		return null;
 	}
 	var reported = new Set();
 	function warnOnce(topic, message, error) {
@@ -273,33 +629,6 @@
 	}
 	function solvedReviewKey(state) {
 		return state.isRevealing && state.isCorrect ? reviewKey(state) : null;
-	}
-	var SVG_NAMESPACE = "http://www.w3.org/2000/svg";
-	function element(tag, attributes = {}, children = []) {
-		const node = document.createElement(tag);
-		for (const [name, value] of Object.entries(attributes)) node.setAttribute(name, value);
-		node.append(...children);
-		return node;
-	}
-	function svgIcon(className, shapes) {
-		const node = document.createElementNS(SVG_NAMESPACE, "svg");
-		node.setAttribute("viewBox", "0 0 24 24");
-		node.setAttribute("class", className);
-		node.setAttribute("aria-hidden", "true");
-		node.innerHTML = shapes;
-		return node;
-	}
-	var KANJI = `${String.raw`\u2E80-\u2E99\u2E9B-\u2EF3\u2F00-\u2FD5`}${String.raw`\u3005\u3007\u3021-\u3029\u3038-\u303B`}${String.raw`\u3400-\u4DBF\u4E00-\u9FFF`}${String.raw`\uF900-\uFA6D\uFA70-\uFAD9`}`;
-	var HIRAGANA = String.raw`\u3041-\u3096\u309D-\u309F`;
-	var KATAKANA = String.raw`\u30A0-\u30FF\u30FC`;
-	var JAPANESE = `${KANJI}${HIRAGANA}${KATAKANA}`;
-	var JAPANESE_CHARACTER = new RegExp(`^[${JAPANESE}]$`);
-	var KANA_THROUGHOUT = new RegExp(`^[${HIRAGANA}${KATAKANA}]+$`);
-	function isJapanese(character) {
-		return JAPANESE_CHARACTER.test(character);
-	}
-	function isEntirelyKana(text) {
-		return KANA_THROUGHOUT.test(text);
 	}
 	var ANNOTATABLE = `${KANJI}\\u30F6`;
 	var FULL_WIDTH_DIGITS = String.raw`\uFF10-\uFF19`;
@@ -519,105 +848,6 @@
 			childList: true,
 			subtree: true
 		});
-	}
-	var STYLE_ID = "bb-styles";
-	var CSS = `
-.bb-sentence-slot {
-  min-width: min(100%, 31.25rem);
-  margin-top: 1.5rem;
-}
-@media (min-width: 640px) {
-  .bb-sentence-slot {
-    min-width: max(fit-content, 31.25rem);
-    margin-top: 2rem;
-  }
-}
-.bb-backdrop {
-  background: rgb(0 0 0 / 0.5);
-}
-.bb-panel-card {
-  width: min(100%, 34rem);
-  max-height: min(80dvh, 40rem);
-}
-.bb-switch {
-  position: relative;
-  flex-shrink: 0;
-  width: 2.75rem;
-  height: 1.5rem;
-  border-radius: 9999px;
-  transition: background-color 150ms ease;
-}
-.bb-switch::after {
-  content: '';
-  position: absolute;
-  top: 0.1875rem;
-  left: 0.1875rem;
-  width: 1.125rem;
-  height: 1.125rem;
-  border-radius: 9999px;
-  background: rgb(var(--c-primary-bg) / 1);
-  transition: transform 150ms ease;
-}
-.bb-switch[aria-checked='true']::after {
-  transform: translateX(1.25rem);
-}
-.bb-feature-copy {
-  display: grid;
-  gap: 0.5rem;
-  min-width: 0;
-}
-.bb-feature-about {
-  min-width: 0;
-}
-.bb-feature-about-summary {
-  display: flex;
-  align-items: center;
-  gap: 0.5em;
-  cursor: pointer;
-  list-style: none;
-  user-select: none;
-}
-.bb-feature-about-summary::-webkit-details-marker {
-  display: none;
-}
-.bb-feature-caret {
-  flex-shrink: 0;
-  width: 1.125em;
-  height: 1.125em;
-  color: rgb(var(--c-primary-accent) / 1);
-  transition: transform 120ms ease;
-}
-.bb-feature-about[open] > .bb-feature-about-summary > .bb-feature-caret {
-  transform: rotate(90deg);
-}
-.bb-feature-desc {
-  margin-top: 0.5rem;
-}
-/**
- * The element is named in the selector to outweigh the \`text-primary-fg\` Bunpro
- * leaves on the field: Bunpro's stylesheets are linked after this one, so an
- * equally specific rule of ours would lose.
- */
-input.bb-wrong-guess {
-  color: rgb(var(--c-incorrect) / 1);
-}
-.bb-shaking {
-  animation: bb-shake 320ms ease;
-}
-@keyframes bb-shake {
-  0%, 100% { transform: translateX(0); }
-  20% { transform: translateX(-0.375rem); }
-  40% { transform: translateX(0.375rem); }
-  60% { transform: translateX(-0.25rem); }
-  80% { transform: translateX(0.125rem); }
-}
-`;
-	function injectStyles() {
-		if (document.getElementById(STYLE_ID)) return;
-		const style = document.createElement("style");
-		style.id = STYLE_ID;
-		style.textContent = CSS;
-		document.head.append(style);
 	}
 	var ROTATION_KEY = "exampleSentence.rotation";
 	function pickSentenceIndex(termKey, sessionId, count) {
@@ -938,103 +1168,34 @@ input.bb-wrong-guess {
 	function onQuizStateChange$1(state) {
 		if (state.reviewable?.type === "vocab") loadTermAudio(state.reviewable);
 	}
-	var version = "0.4.1";
-	var PANEL_ID = "bb-settings-panel";
-	var CARD_CLASS = "bb-panel-card relative z-1 flex flex-col overflow-hidden rounded-normal border border-rim bg-secondary-bg text-primary-fg shadow-normal";
-	var CLOSE_SHAPES = "<path d=\"M6 6 18 18M18 6 6 18\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\"/>";
-	var CARET_SHAPES = "<path d=\"M9.29 6.71a1 1 0 0 0 0 1.41L13.17 12l-3.88 3.88a1 1 0 1 0 1.41 1.41l4.59-4.59a1 1 0 0 0 0-1.41L10.7 6.7a1 1 0 0 0-1.41.01\" fill=\"currentColor\"/>";
-	function isSettingsPanelOpen() {
-		return document.getElementById(PANEL_ID) !== null;
+	var claims = [];
+	function claimKeystrokes(node, onEscape) {
+		const claim = {
+			node,
+			onEscape
+		};
+		claims.push(claim);
+		if (claims.length === 1) window.addEventListener("keydown", onKeyDown$2, true);
+		return () => {
+			const index = claims.indexOf(claim);
+			if (index !== -1) claims.splice(index, 1);
+			if (claims.length === 0) window.removeEventListener("keydown", onKeyDown$2, true);
+		};
 	}
-	function toggleSettingsPanel() {
-		const open = document.getElementById(PANEL_ID);
-		if (open) {
-			open.remove();
+	function areKeystrokesClaimed() {
+		return claims.length > 0;
+	}
+	function onKeyDown$2(event) {
+		const newest = claims[claims.length - 1];
+		if (!newest) return;
+		if (event.key === "Escape") {
+			event.preventDefault();
+			event.stopPropagation();
+			newest.onEscape();
 			return;
 		}
-		injectStyles();
-		const panel = buildPanel();
-		document.body.append(panel);
-		panel.querySelector(".bb-panel-card")?.focus();
-	}
-	function closePanel() {
-		document.getElementById(PANEL_ID)?.remove();
-	}
-	function buildPanel() {
-		const backdrop = element("button", {
-			class: "bb-backdrop absolute inset-0",
-			"aria-label": "Close settings"
-		});
-		backdrop.addEventListener("click", closePanel);
-		const card = element("div", {
-			class: CARD_CLASS,
-			tabindex: "-1"
-		}, [buildHeader(), element("div", { class: "grow overflow-y-auto p-16" }, [buildFeatureList()])]);
-		const panel = element("div", {
-			id: PANEL_ID,
-			class: "fixed inset-0 z-modal flex items-center justify-center p-16",
-			role: "dialog",
-			"aria-modal": "true"
-		}, [backdrop, card]);
-		panel.addEventListener("keydown", (event) => {
-			event.stopPropagation();
-			if (event.key === "Escape") closePanel();
-		});
-		return panel;
-	}
-	function buildHeader() {
-		const close = element("button", {
-			class: "text-primary-accent",
-			title: "Close",
-			"aria-label": "Close"
-		}, [svgIcon("h-24 w-24", CLOSE_SHAPES)]);
-		close.addEventListener("click", closePanel);
-		return element("header", { class: "flex items-center justify-between gap-16 border-b border-rim p-16" }, [element("div", { class: "flex items-baseline gap-8" }, [element("h2", { class: "text-large font-bold" }, ["Better Bunpro"]), element("span", { class: "text-small text-tertiary-fg" }, [`v${scriptVersion()}`])]), close]);
-	}
-	function scriptVersion() {
-		return version;
-	}
-	function buildFeatureList() {
-		return element("ul", { class: "grid gap-16" }, listFeatures().map(buildFeatureRow));
-	}
-	function buildFeatureRow(feature) {
-		const description = element("p", { class: "bb-feature-desc text-small text-tertiary-fg" }, [feature.description]);
-		const caret = svgIcon("bb-feature-caret", CARET_SHAPES);
-		return element("li", { class: "flex items-start justify-between gap-16" }, [element("details", { class: "bb-feature-about grow" }, [element("summary", { class: "bb-feature-about-summary font-bold" }, [element("span", {}, [feature.title]), caret]), ...feature.credit ? [description, buildCredit(feature.credit)] : [description]]), buildSwitch(feature)]);
-	}
-	function buildCredit(credit) {
-		return element("p", { class: "bb-feature-desc text-small text-tertiary-fg" }, [
-			"Idea from ",
-			buildLink(credit.author, credit.authorUrl),
-			"’s ",
-			buildLink(credit.work, credit.workUrl),
-			"."
-		]);
-	}
-	function buildLink(text, href) {
-		return element("a", {
-			href,
-			target: "_blank",
-			rel: "noreferrer noopener",
-			class: "text-primary-accent"
-		}, [text]);
-	}
-	function buildSwitch(feature) {
-		const button = element("button", {
-			role: "switch",
-			"aria-label": feature.title
-		});
-		const paint = () => {
-			const enabled = isFeatureEnabled(feature);
-			button.setAttribute("aria-checked", String(enabled));
-			button.className = `bb-switch ${enabled ? "bg-primary-accent" : "bg-tertiary-bg"}`;
-		};
-		button.addEventListener("click", () => {
-			setFeatureEnabled(feature, !isFeatureEnabled(feature));
-			paint();
-		});
-		paint();
-		return button;
+		const target = event.target;
+		if (target instanceof Node && claims.some((claim) => claim.node.contains(target))) event.stopPropagation();
 	}
 	var WRONG_CLASS = "bb-wrong-guess";
 	var SHAKE_CLASS = "bb-shaking";
@@ -1100,18 +1261,6 @@ input.bb-wrong-guess {
 		});
 		return row[target.length - 1] ?? left.length;
 	}
-	var LIGATURES = {
-		æ: "ae",
-		œ: "oe",
-		ß: "ss"
-	};
-	function normalize(text) {
-		return [...text.toLowerCase()].map(foldLetter).join("").trim();
-	}
-	function foldLetter(letter) {
-		if (isJapanese(letter)) return letter;
-		return (LIGATURES[letter] ?? letter).normalize("NFD").replace(/[\u0300-\u036f]/g, "");
-	}
 	var SUBMIT_KEY = "Enter";
 	var lastRejected = null;
 	var keepGuessingFeature = {
@@ -1131,7 +1280,7 @@ input.bb-wrong-guess {
 		}
 	};
 	function onKeyDown$1(event) {
-		if (event.key !== SUBMIT_KEY || event.repeat || hasModifier$1(event) || isSettingsPanelOpen()) return;
+		if (event.key !== SUBMIT_KEY || event.repeat || hasModifier$1(event) || areKeystrokesClaimed()) return;
 		swallowIfWrong(event);
 	}
 	function onClick(event) {
@@ -1241,7 +1390,7 @@ input.bb-wrong-guess {
 		if (state.reviewable && state.sessionId) loadSentences(state.reviewable);
 	}
 	function onKeyDown(event) {
-		if (event.key !== CYCLE_KEY || hasModifier(event) || isSettingsPanelOpen()) return;
+		if (event.key !== CYCLE_KEY || hasModifier(event) || areKeystrokesClaimed()) return;
 		const state = readQuizState();
 		const reviewKey = solvedReviewKey(state);
 		if (!reviewKey || !state.reviewable || !hasSentenceToCycle(reviewKey)) return;
@@ -1264,6 +1413,99 @@ input.bb-wrong-guess {
 			sentences,
 			index: nextSentenceIndex(shown?.reviewKey === reviewKey ? shown.index : bunproSentenceIndex(sentences), sentences.length)
 		});
+	}
+	var version = "0.4.1";
+	var PANEL_ID = "bb-settings-panel";
+	var CARD_CLASS = "bb-panel-card relative z-1 flex flex-col overflow-hidden rounded-normal border border-rim bg-secondary-bg text-primary-fg shadow-normal";
+	var CLOSE_SHAPES = "<path d=\"M6 6 18 18M18 6 6 18\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\"/>";
+	var CARET_SHAPES = "<path d=\"M9.29 6.71a1 1 0 0 0 0 1.41L13.17 12l-3.88 3.88a1 1 0 1 0 1.41 1.41l4.59-4.59a1 1 0 0 0 0-1.41L10.7 6.7a1 1 0 0 0-1.41.01\" fill=\"currentColor\"/>";
+	var releaseKeystrokes = null;
+	function toggleSettingsPanel() {
+		if (document.getElementById(PANEL_ID)) {
+			closePanel();
+			return;
+		}
+		injectStyles();
+		const panel = buildPanel();
+		document.body.append(panel);
+		releaseKeystrokes = claimKeystrokes(panel, closePanel);
+		panel.querySelector(".bb-panel-card")?.focus();
+	}
+	function closePanel() {
+		releaseKeystrokes?.();
+		releaseKeystrokes = null;
+		document.getElementById(PANEL_ID)?.remove();
+	}
+	function buildPanel() {
+		const backdrop = element("button", {
+			class: "bb-backdrop absolute inset-0",
+			"aria-label": "Close settings"
+		});
+		backdrop.addEventListener("click", closePanel);
+		const card = element("div", {
+			class: CARD_CLASS,
+			tabindex: "-1"
+		}, [buildHeader(), element("div", { class: "grow overflow-y-auto p-16" }, [buildFeatureList()])]);
+		return element("div", {
+			id: PANEL_ID,
+			class: "fixed inset-0 z-modal flex items-center justify-center p-16",
+			role: "dialog",
+			"aria-modal": "true"
+		}, [backdrop, card]);
+	}
+	function buildHeader() {
+		const close = element("button", {
+			class: "text-primary-accent",
+			title: "Close",
+			"aria-label": "Close"
+		}, [svgIcon("h-24 w-24", CLOSE_SHAPES)]);
+		close.addEventListener("click", closePanel);
+		return element("header", { class: "flex items-center justify-between gap-16 border-b border-rim p-16" }, [element("div", { class: "flex items-baseline gap-8" }, [element("h2", { class: "text-large font-bold" }, ["Better Bunpro"]), element("span", { class: "text-small text-tertiary-fg" }, [`v${scriptVersion()}`])]), close]);
+	}
+	function scriptVersion() {
+		return version;
+	}
+	function buildFeatureList() {
+		return element("ul", { class: "grid gap-16" }, listFeatures().map(buildFeatureRow));
+	}
+	function buildFeatureRow(feature) {
+		const description = element("p", { class: "bb-feature-desc text-small text-tertiary-fg" }, [feature.description]);
+		const caret = svgIcon("bb-feature-caret", CARET_SHAPES);
+		return element("li", { class: "flex items-start justify-between gap-16" }, [element("details", { class: "bb-feature-about grow" }, [element("summary", { class: "bb-feature-about-summary font-bold" }, [element("span", {}, [feature.title]), caret]), ...feature.credit ? [description, buildCredit(feature.credit)] : [description]]), buildSwitch(feature)]);
+	}
+	function buildCredit(credit) {
+		return element("p", { class: "bb-feature-desc text-small text-tertiary-fg" }, [
+			"Idea from ",
+			buildLink(credit.author, credit.authorUrl),
+			"’s ",
+			buildLink(credit.work, credit.workUrl),
+			"."
+		]);
+	}
+	function buildLink(text, href) {
+		return element("a", {
+			href,
+			target: "_blank",
+			rel: "noreferrer noopener",
+			class: "text-primary-accent"
+		}, [text]);
+	}
+	function buildSwitch(feature) {
+		const button = element("button", {
+			role: "switch",
+			"aria-label": feature.title
+		});
+		const paint = () => {
+			const enabled = isFeatureEnabled(feature);
+			button.setAttribute("aria-checked", String(enabled));
+			button.className = `bb-switch ${enabled ? "bg-primary-accent" : "bg-tertiary-bg"}`;
+		};
+		button.addEventListener("click", () => {
+			setFeatureEnabled(feature, !isFeatureEnabled(feature));
+			paint();
+		});
+		paint();
+		return button;
 	}
 	var LAUNCHER_MARKER = "data-bb-launcher";
 	var TUNE_SHAPES = `<g fill="currentColor">
@@ -1309,6 +1551,7 @@ input.bb-wrong-guess {
 	registerFeature(sentenceCycleFeature);
 	registerFeature(keepGuessingFeature);
 	registerFeature(humanTermAudioFeature);
+	registerFeature(addSynonymFeature);
 	mountSettingsLaunchers();
 	startEnabledFeatures();
 })();
