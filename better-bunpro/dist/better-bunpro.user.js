@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Better Bunpro
 // @namespace    mwsmws22
-// @version      0.1.10
+// @version      0.1.11
 // @author       mwsmws22
 // @description  Features I wish Bunpro had. Show example sentences for A1+ vocab after a correct answer, and more.
 // @license      MIT
@@ -243,6 +243,7 @@
 .bb-feature-about-summary {
   display: flex;
   align-items: center;
+  gap: 0.5em;
   cursor: pointer;
   list-style: none;
   user-select: none;
@@ -250,17 +251,15 @@
 .bb-feature-about-summary::-webkit-details-marker {
   display: none;
 }
-.bb-feature-about-summary::after {
-  content: '▸';
+.bb-feature-caret {
   flex-shrink: 0;
-  margin-left: 0.5em;
+  width: 1.125em;
+  height: 1.125em;
   color: rgb(var(--c-primary-accent) / 1);
-  font-size: 1.15em;
-  font-weight: normal;
-  line-height: 1;
+  transition: transform 120ms ease;
 }
-.bb-feature-about[open] > .bb-feature-about-summary::after {
-  content: '▾';
+.bb-feature-about[open] > .bb-feature-about-summary > .bb-feature-caret {
+  transform: rotate(90deg);
 }
 .bb-feature-desc {
   margin-top: 0.5rem;
@@ -469,6 +468,7 @@
 	var PANEL_ID = "bb-settings-panel";
 	var CARD_CLASS = "bb-panel-card relative z-1 flex flex-col overflow-hidden rounded-normal border border-rim bg-secondary-bg text-primary-fg shadow-normal";
 	var CLOSE_SHAPES = "<path d=\"M6 6 18 18M18 6 6 18\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\"/>";
+	var CARET_SHAPES = "<path d=\"M9.29 6.71a1 1 0 0 0 0 1.41L13.17 12l-3.88 3.88a1 1 0 1 0 1.41 1.41l4.59-4.59a1 1 0 0 0 0-1.41L10.7 6.7a1 1 0 0 0-1.41.01\" fill=\"currentColor\"/>";
 	function toggleSettingsPanel() {
 		const open = document.getElementById(PANEL_ID);
 		if (open) {
@@ -522,7 +522,8 @@
 	}
 	function buildFeatureRow(feature) {
 		const description = element("p", { class: "bb-feature-desc text-small text-tertiary-fg" }, [feature.description]);
-		return element("li", { class: "flex items-start justify-between gap-16" }, [element("details", { class: "bb-feature-about grow" }, [element("summary", { class: "bb-feature-about-summary font-bold" }, [feature.title]), description]), buildSwitch(feature)]);
+		const caret = svgIcon("bb-feature-caret", CARET_SHAPES);
+		return element("li", { class: "flex items-start justify-between gap-16" }, [element("details", { class: "bb-feature-about grow" }, [element("summary", { class: "bb-feature-about-summary font-bold" }, [element("span", {}, [feature.title]), caret]), description]), buildSwitch(feature)]);
 	}
 	function buildSwitch(feature) {
 		const button = element("button", {

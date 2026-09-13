@@ -56,6 +56,7 @@ const CSS = `
 .bb-feature-about-summary {
   display: flex;
   align-items: center;
+  gap: 0.5em;
   cursor: pointer;
   list-style: none;
   user-select: none;
@@ -63,17 +64,15 @@ const CSS = `
 .bb-feature-about-summary::-webkit-details-marker {
   display: none;
 }
-.bb-feature-about-summary::after {
-  content: '▸';
+.bb-feature-caret {
   flex-shrink: 0;
-  margin-left: 0.5em;
+  width: 1.125em;
+  height: 1.125em;
   color: rgb(var(--c-primary-accent) / 1);
-  font-size: 1.15em;
-  font-weight: normal;
-  line-height: 1;
+  transition: transform 120ms ease;
 }
-.bb-feature-about[open] > .bb-feature-about-summary::after {
-  content: '▾';
+.bb-feature-about[open] > .bb-feature-about-summary > .bb-feature-caret {
+  transform: rotate(90deg);
 }
 .bb-feature-desc {
   margin-top: 0.5rem;

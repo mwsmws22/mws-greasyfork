@@ -9,6 +9,8 @@ const CARD_CLASS =
   'border-rim bg-secondary-bg text-primary-fg shadow-normal';
 const CLOSE_SHAPES =
   '<path d="M6 6 18 18M18 6 6 18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>';
+const CARET_SHAPES =
+  '<path d="M9.29 6.71a1 1 0 0 0 0 1.41L13.17 12l-3.88 3.88a1 1 0 1 0 1.41 1.41l4.59-4.59a1 1 0 0 0 0-1.41L10.7 6.7a1 1 0 0 0-1.41.01" fill="currentColor"/>';
 
 export function toggleSettingsPanel(): void {
   const open = document.getElementById(PANEL_ID);
@@ -92,10 +94,12 @@ function buildFeatureRow(feature: Feature): HTMLElement {
   const description = element('p', { class: 'bb-feature-desc text-small text-tertiary-fg' }, [
     feature.description,
   ]);
-  const about = element('details', { class: 'bb-feature-about grow' }, [
-    element('summary', { class: 'bb-feature-about-summary font-bold' }, [feature.title]),
-    description,
+  const caret = svgIcon('bb-feature-caret', CARET_SHAPES);
+  const summary = element('summary', { class: 'bb-feature-about-summary font-bold' }, [
+    element('span', {}, [feature.title]),
+    caret,
   ]);
+  const about = element('details', { class: 'bb-feature-about grow' }, [summary, description]);
 
   return element('li', { class: 'flex items-start justify-between gap-16' }, [
     about,
