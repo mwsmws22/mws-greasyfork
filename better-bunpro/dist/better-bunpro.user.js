@@ -1,12 +1,13 @@
 // ==UserScript==
 // @name         Better Bunpro
 // @namespace    mwsmws22
-// @version      0.1.6
+// @version      0.1.9
 // @author       mwsmws22
 // @description  Features I wish Bunpro had. Show example sentences for A1+ vocab after a correct answer, and more.
 // @license      MIT
 // @match        https://bunpro.jp/*
 // @grant        GM_getValue
+// @grant        GM_info
 // @grant        GM_registerMenuCommand
 // @grant        GM_setValue
 // @run-at       document-idle
@@ -15,6 +16,7 @@
 (function() {
 	"use strict";
 	var _GM_getValue = (() => typeof GM_getValue != "undefined" ? GM_getValue : void 0)();
+	var _GM_info = (() => typeof GM_info != "undefined" ? GM_info : void 0)();
 	var _GM_registerMenuCommand = (() => typeof GM_registerMenuCommand != "undefined" ? GM_registerMenuCommand : void 0)();
 	var _GM_setValue = (() => typeof GM_setValue != "undefined" ? GM_setValue : void 0)();
 	var listeners = new Set();
@@ -193,13 +195,11 @@
 	var CSS = `
 .bb-sentence-slot {
   min-width: min(100%, 31.25rem);
-  min-height: 6.5rem;
   margin-top: 1.5rem;
 }
 @media (min-width: 640px) {
   .bb-sentence-slot {
     min-width: max(fit-content, 31.25rem);
-    min-height: 7.5rem;
     margin-top: 2rem;
   }
 }
@@ -249,12 +249,17 @@
   display: none;
 }
 .bb-feature-about-summary::after {
-  content: ' ▸';
+  content: '▸';
+  display: inline-block;
+  margin-left: 0.5em;
   color: rgb(var(--c-primary-accent) / 1);
+  font-size: 1.15em;
   font-weight: normal;
+  line-height: 1;
+  vertical-align: -0.05em;
 }
 .bb-feature-about[open] > .bb-feature-about-summary::after {
-  content: ' ▾';
+  content: '▾';
 }
 .bb-feature-desc {
   margin-top: 0.5rem;
@@ -317,7 +322,7 @@
 		return node;
 	}
 	var SLOT_CLASS = "bb-sentence-slot mx-auto w-fit animate-fade-in";
-	var CARD_CLASS$1 = "not-prose relative my-0 block overflow-hidden rounded-normal border align-top sm:flex sm:items-center sm:justify-between sm:gap-4 p-16 sm:p-24 bg-tertiary-bg/50 border-rim";
+	var CARD_CLASS$1 = "not-prose relative my-0 block overflow-hidden rounded-normal border align-top sm:flex sm:items-center sm:justify-between sm:gap-4 px-16 pt-12 pb-16 sm:px-24 sm:pt-16 sm:pb-24 bg-tertiary-bg/50 border-rim";
 	var TEXT_COLUMN_CLASS = "relative z-1 flex grow flex-col items-center justify-center gap-4 text-center";
 	var JAPANESE_CLASS = "bp-ddw text-large md:text-subtitle prose w-full";
 	var ENGLISH_CLASS = "bp-sdw text-body prose w-full";
@@ -506,7 +511,10 @@
 			"aria-label": "Close"
 		}, [svgIcon("h-24 w-24", CLOSE_SHAPES)]);
 		close.addEventListener("click", closePanel);
-		return element("header", { class: "flex items-center justify-between gap-16 border-b border-rim p-16" }, [element("h2", { class: "text-large font-bold" }, ["Better Bunpro"]), close]);
+		return element("header", { class: "flex items-center justify-between gap-16 border-b border-rim p-16" }, [element("div", { class: "flex items-baseline gap-8" }, [element("h2", { class: "text-large font-bold" }, ["Better Bunpro"]), element("span", { class: "text-small text-tertiary-fg" }, [`v${scriptVersion()}`])]), close]);
+	}
+	function scriptVersion() {
+		return _GM_info?.script?.version ?? "0.0.0";
 	}
 	function buildFeatureList() {
 		return element("ul", { class: "grid gap-16" }, listFeatures().map(buildFeatureRow));

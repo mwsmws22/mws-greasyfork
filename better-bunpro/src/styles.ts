@@ -8,13 +8,11 @@ const STYLE_ID = 'bb-styles';
 const CSS = `
 .bb-sentence-slot {
   min-width: min(100%, 31.25rem);
-  min-height: 6.5rem;
   margin-top: 1.5rem;
 }
 @media (min-width: 640px) {
   .bb-sentence-slot {
     min-width: max(fit-content, 31.25rem);
-    min-height: 7.5rem;
     margin-top: 2rem;
   }
 }
@@ -64,12 +62,17 @@ const CSS = `
   display: none;
 }
 .bb-feature-about-summary::after {
-  content: ' ▸';
+  content: '▸';
+  display: inline-block;
+  margin-left: 0.5em;
   color: rgb(var(--c-primary-accent) / 1);
+  font-size: 1.15em;
   font-weight: normal;
+  line-height: 1;
+  vertical-align: -0.05em;
 }
 .bb-feature-about[open] > .bb-feature-about-summary::after {
-  content: ' ▾';
+  content: '▾';
 }
 .bb-feature-desc {
   margin-top: 0.5rem;

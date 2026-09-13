@@ -1,3 +1,4 @@
+import { GM_info } from '$';
 import { element, svgIcon } from '../dom';
 import { isFeatureEnabled, listFeatures, setFeatureEnabled, type Feature } from '../features/registry';
 import { injectStyles } from '../styles';
@@ -67,11 +68,20 @@ function buildHeader(): HTMLElement {
   );
   close.addEventListener('click', closePanel);
 
+  const title = element('div', { class: 'flex items-baseline gap-8' }, [
+    element('h2', { class: 'text-large font-bold' }, ['Better Bunpro']),
+    element('span', { class: 'text-small text-tertiary-fg' }, [`v${scriptVersion()}`]),
+  ]);
+
   return element(
     'header',
     { class: 'flex items-center justify-between gap-16 border-b border-rim p-16' },
-    [element('h2', { class: 'text-large font-bold' }, ['Better Bunpro']), close],
+    [title, close],
   );
+}
+
+function scriptVersion(): string {
+  return GM_info?.script?.version ?? '0.0.0';
 }
 
 function buildFeatureList(): HTMLElement {

@@ -9,7 +9,8 @@ import { element, svgIcon } from '../../dom';
 const SLOT_CLASS = 'bb-sentence-slot mx-auto w-fit animate-fade-in';
 const CARD_CLASS =
   'not-prose relative my-0 block overflow-hidden rounded-normal border align-top ' +
-  'sm:flex sm:items-center sm:justify-between sm:gap-4 p-16 sm:p-24 ' +
+  'sm:flex sm:items-center sm:justify-between sm:gap-4 ' +
+  'px-16 pt-12 pb-16 sm:px-24 sm:pt-16 sm:pb-24 ' +
   'bg-tertiary-bg/50 border-rim';
 const TEXT_COLUMN_CLASS =
   'relative z-1 flex grow flex-col items-center justify-center gap-4 text-center';
