@@ -12,4 +12,6 @@ Once you have answered a review correctly, press **Tab** to see the same item in
 
 Your answer always belongs to the sentence you were actually quizzed on — nothing is re-graded — and the sentence your next review session starts on is unchanged.
 
+Idea from [Joseph G](https://greasyfork.org/en/users/1613422-joseph-g)'s [Bunpro Sentence Cycle](https://greasyfork.org/en/scripts/584571-bunpro-sentence-cycle).
+
 Source: [github.com/mwsmws22/mws-greasyfork](https://github.com/mwsmws22/mws-greasyfork/tree/main/better-bunpro)

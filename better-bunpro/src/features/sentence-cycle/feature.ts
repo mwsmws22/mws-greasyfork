@@ -32,6 +32,12 @@ export const sentenceCycleFeature: Feature = {
     'review the question sentence itself is swapped; elsewhere the sentence card is. Your ' +
     'answer still belongs to the sentence you were actually quizzed on, and the sentence ' +
     'your next review session starts on is unchanged.',
+  credit: {
+    author: 'Joseph G',
+    authorUrl: 'https://greasyfork.org/en/users/1613422-joseph-g',
+    work: 'Bunpro Sentence Cycle',
+    workUrl: 'https://greasyfork.org/en/scripts/584571-bunpro-sentence-cycle',
+  },
   enabledByDefault: true,
 
   start() {

@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Better Bunpro
 // @namespace    mwsmws22
-// @version      0.2.0
+// @version      0.2.1
 // @author       mwsmws22
 // @description  Features I wish Bunpro had. Show example sentences for A1+ vocab after a correct answer, cycle sentences with Tab, and more.
 // @license      MIT
@@ -716,7 +716,24 @@
 	function buildFeatureRow(feature) {
 		const description = element("p", { class: "bb-feature-desc text-small text-tertiary-fg" }, [feature.description]);
 		const caret = svgIcon("bb-feature-caret", CARET_SHAPES);
-		return element("li", { class: "flex items-start justify-between gap-16" }, [element("details", { class: "bb-feature-about grow" }, [element("summary", { class: "bb-feature-about-summary font-bold" }, [element("span", {}, [feature.title]), caret]), description]), buildSwitch(feature)]);
+		return element("li", { class: "flex items-start justify-between gap-16" }, [element("details", { class: "bb-feature-about grow" }, [element("summary", { class: "bb-feature-about-summary font-bold" }, [element("span", {}, [feature.title]), caret]), ...feature.credit ? [description, buildCredit(feature.credit)] : [description]]), buildSwitch(feature)]);
+	}
+	function buildCredit(credit) {
+		return element("p", { class: "bb-feature-desc text-small text-tertiary-fg" }, [
+			"Idea from ",
+			buildLink(credit.author, credit.authorUrl),
+			"’s ",
+			buildLink(credit.work, credit.workUrl),
+			"."
+		]);
+	}
+	function buildLink(text, href) {
+		return element("a", {
+			href,
+			target: "_blank",
+			rel: "noreferrer noopener",
+			class: "text-primary-accent"
+		}, [text]);
 	}
 	function buildSwitch(feature) {
 		const button = element("button", {
@@ -744,6 +761,12 @@
 		id: "sentence-cycle",
 		title: "Cycle example sentences with Tab",
 		description: "Once you have answered a review correctly, press Tab to see the same item in another one of its example sentences, and again to keep cycling through them. On a cloze review the question sentence itself is swapped; elsewhere the sentence card is. Your answer still belongs to the sentence you were actually quizzed on, and the sentence your next review session starts on is unchanged.",
+		credit: {
+			author: "Joseph G",
+			authorUrl: "https://greasyfork.org/en/users/1613422-joseph-g",
+			work: "Bunpro Sentence Cycle",
+			workUrl: "https://greasyfork.org/en/scripts/584571-bunpro-sentence-cycle"
+		},
 		enabledByDefault: true,
 		start() {
 			injectStyles();

@@ -1,9 +1,18 @@
 import { readStored, writeStored } from '../settings/store';
 
+/** Whose idea a feature was, for features that are somebody else's. */
+export interface FeatureCredit {
+  author: string;
+  authorUrl: string;
+  work: string;
+  workUrl: string;
+}
+
 export interface Feature {
   id: string;
   title: string;
   description: string;
+  credit?: FeatureCredit;
   enabledByDefault: boolean;
   start(): void;
   stop(): void;

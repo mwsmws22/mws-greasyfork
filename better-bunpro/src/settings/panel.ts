@@ -1,6 +1,12 @@
 import { GM_info } from '$';
 import { element, svgIcon } from '../dom';
-import { isFeatureEnabled, listFeatures, setFeatureEnabled, type Feature } from '../features/registry';
+import {
+  isFeatureEnabled,
+  listFeatures,
+  setFeatureEnabled,
+  type Feature,
+  type FeatureCredit,
+} from '../features/registry';
 import { injectStyles } from '../styles';
 
 const PANEL_ID = 'bb-settings-panel';
@@ -103,12 +109,31 @@ function buildFeatureRow(feature: Feature): HTMLElement {
     element('span', {}, [feature.title]),
     caret,
   ]);
-  const about = element('details', { class: 'bb-feature-about grow' }, [summary, description]);
+  const copy = feature.credit ? [description, buildCredit(feature.credit)] : [description];
+  const about = element('details', { class: 'bb-feature-about grow' }, [summary, ...copy]);
 
   return element('li', { class: 'flex items-start justify-between gap-16' }, [
     about,
     buildSwitch(feature),
   ]);
+}
+
+function buildCredit(credit: FeatureCredit): HTMLElement {
+  return element('p', { class: 'bb-feature-desc text-small text-tertiary-fg' }, [
+    'Idea from ',
+    buildLink(credit.author, credit.authorUrl),
+    '\u2019s ',
+    buildLink(credit.work, credit.workUrl),
+    '.',
+  ]);
+}
+
+function buildLink(text: string, href: string): HTMLElement {
+  return element(
+    'a',
+    { href, target: '_blank', rel: 'noreferrer noopener', class: 'text-primary-accent' },
+    [text],
+  );
 }
 
 function buildSwitch(feature: Feature): HTMLElement {
