@@ -19,11 +19,11 @@ let hasWarned = false;
 
 export const exampleSentenceFeature: Feature = {
   id: 'example-sentence',
-  title: 'Example sentence for every vocab review',
+  title: 'Show unverified example sentences for A1+ vocab',
   description:
-    'Bunpro keeps a term’s example sentences out of reviews until their translations are ' +
-    'verified. This shows one anyway, in the same card Bunpro uses, moving to the term’s ' +
-    'next sentence each session.',
+    'Bunpro does not show unverified example sentences for A1+ vocab in reviews, ' +
+    'even though they are present (this is available on mobile). After a correct ' +
+    'answer, this shows one of those sentences and cycles through them each review session.',
   enabledByDefault: true,
 
   start() {

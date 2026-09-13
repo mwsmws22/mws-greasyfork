@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Better Bunpro
 // @namespace    mwsmws22
-// @version      0.1.1
+// @version      0.1.2
 // @author       mwsmws22
 // @description  Features I wish Bunpro had. Show example sentences for A1+ vocab after a correct answer, and more.
 // @license      MIT
@@ -351,8 +351,8 @@
 	var hasWarned = false;
 	var exampleSentenceFeature = {
 		id: "example-sentence",
-		title: "Example sentence for every vocab review",
-		description: "Bunpro keeps a term’s example sentences out of reviews until their translations are verified. This shows one anyway, in the same card Bunpro uses, moving to the term’s next sentence each session.",
+		title: "Show unverified example sentences for A1+ vocab",
+		description: "Bunpro does not show unverified example sentences for A1+ vocab in reviews, even though they are present (this is available on mobile). After a correct answer, this shows one of those sentences and cycles through them each review session.",
 		enabledByDefault: true,
 		start() {
 			injectStyles();

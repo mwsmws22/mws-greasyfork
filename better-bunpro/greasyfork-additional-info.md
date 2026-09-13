@@ -2,8 +2,8 @@ Small quality-of-life tweaks for [Bunpro](https://bunpro.jp) — features I wish
 
 Open settings from the **sliders icon** in the quiz toolbar, or Tampermonkey → Better Bunpro → Settings.
 
-### Show example sentence for A1+ terms upon correct answer
+### Show unverified example sentences for A1+ vocab
 
-Bunpro has many unverified example sentences, so they are left out of reviews. After a correct answer on A1+ vocab, this shows one of those sentences in Bunpro's own card style, cycling to the next sentence each session.
+Bunpro does not show unverified example sentences for A1+ vocab in reviews, even though they are present (this is available on mobile). After a correct answer, this shows one of those sentences and cycles through them each review session.
 
 Source: [github.com/mwsmws22/mws-greasyfork](https://github.com/mwsmws22/mws-greasyfork/tree/main/better-bunpro)
