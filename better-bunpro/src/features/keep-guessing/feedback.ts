@@ -7,13 +7,15 @@
 import { findAnswerConsole, findAnswerInput } from '../../bunpro/quiz-dom';
 
 const WRONG_CLASS = 'bb-wrong-guess';
+const CORRECT_CLASS = 'bb-correct-guess';
 const SHAKE_CLASS = 'bb-shaking';
 /**
- * Bunpro's own class for a wrong answer. Their red text class cannot be borrowed
- * the same way: the field keeps `text-primary-fg`, which is declared later in
- * their stylesheet and so wins, hence the colour in `bb-wrong-guess`.
+ * Bunpro's own classes for a graded answer. Their red/green text classes cannot
+ * be borrowed the same way: the field keeps `text-primary-fg`, which is declared
+ * later in their stylesheet and so wins, hence the colour in `bb-*-guess`.
  */
 const BUNPRO_INCORRECT_CLASS = 'bp-quiz-console--incorrect';
+const BUNPRO_CORRECT_CLASS = 'bp-quiz-console--correct';
 const WATCHED_ATTRIBUTE = 'bbWatched';
 
 export function markGuessWrong(): void {
@@ -23,9 +25,24 @@ export function markGuessWrong(): void {
     return;
   }
   watchField(input);
+  input.classList.remove(CORRECT_CLASS);
   input.classList.add(WRONG_CLASS);
+  answerConsole.classList.remove(BUNPRO_CORRECT_CLASS);
   answerConsole.classList.add(BUNPRO_INCORRECT_CLASS);
   shake(input);
+}
+
+export function markGuessCorrect(): void {
+  const input = findAnswerInput();
+  const answerConsole = findAnswerConsole();
+  if (!input || !answerConsole) {
+    return;
+  }
+  watchField(input);
+  input.classList.remove(WRONG_CLASS);
+  input.classList.add(CORRECT_CLASS);
+  answerConsole.classList.remove(BUNPRO_INCORRECT_CLASS);
+  answerConsole.classList.add(BUNPRO_CORRECT_CLASS);
 }
 
 /**
@@ -33,8 +50,8 @@ export function markGuessWrong(): void {
  * clears the mark on its own; this is for a guess abandoned before then.
  */
 function clearMark(): void {
-  findAnswerInput()?.classList.remove(WRONG_CLASS);
-  findAnswerConsole()?.classList.remove(BUNPRO_INCORRECT_CLASS);
+  findAnswerInput()?.classList.remove(WRONG_CLASS, CORRECT_CLASS);
+  findAnswerConsole()?.classList.remove(BUNPRO_INCORRECT_CLASS, BUNPRO_CORRECT_CLASS);
 }
 
 function shake(input: HTMLElement): void {

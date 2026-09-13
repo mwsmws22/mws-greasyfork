@@ -100,6 +100,9 @@
 	function findSubmitButton() {
 		return document.querySelector(".InputManual__button");
 	}
+	function findUndoButton() {
+		return document.querySelector("svg[data-name=\"UNDO\"]")?.closest("button") ?? null;
+	}
 	function findAnswerConsole() {
 		return document.querySelector(".InputManual");
 	}
@@ -459,6 +462,9 @@
 input.bb-wrong-guess {
   color: rgb(var(--c-incorrect) / 1);
 }
+input.bb-correct-guess {
+  color: rgb(var(--c-correct) / 1);
+}
 .bb-shaking {
   animation: bb-shake 320ms ease;
 }
@@ -513,6 +519,62 @@ input.bb-wrong-guess {
 		paint();
 		return button;
 	}
+	var accepted = null;
+	function rememberAcceptedGuess(reviewKey, guess, official) {
+		accepted = {
+			reviewKey,
+			guess,
+			official
+		};
+	}
+	function takeAcceptedOfficial(reviewKey, guess) {
+		if (accepted === null || accepted.reviewKey !== reviewKey || accepted.guess !== guess) return null;
+		const official = accepted.official;
+		accepted = null;
+		return official;
+	}
+	var WRONG_CLASS = "bb-wrong-guess";
+	var CORRECT_CLASS = "bb-correct-guess";
+	var SHAKE_CLASS = "bb-shaking";
+	var BUNPRO_INCORRECT_CLASS = "bp-quiz-console--incorrect";
+	var BUNPRO_CORRECT_CLASS = "bp-quiz-console--correct";
+	var WATCHED_ATTRIBUTE = "bbWatched";
+	function markGuessWrong() {
+		const input = findAnswerInput();
+		const answerConsole = findAnswerConsole();
+		if (!input || !answerConsole) return;
+		watchField(input);
+		input.classList.remove(CORRECT_CLASS);
+		input.classList.add(WRONG_CLASS);
+		answerConsole.classList.remove(BUNPRO_CORRECT_CLASS);
+		answerConsole.classList.add(BUNPRO_INCORRECT_CLASS);
+		shake(input);
+	}
+	function markGuessCorrect() {
+		const input = findAnswerInput();
+		const answerConsole = findAnswerConsole();
+		if (!input || !answerConsole) return;
+		watchField(input);
+		input.classList.remove(WRONG_CLASS);
+		input.classList.add(CORRECT_CLASS);
+		answerConsole.classList.remove(BUNPRO_INCORRECT_CLASS);
+		answerConsole.classList.add(BUNPRO_CORRECT_CLASS);
+	}
+	function clearMark() {
+		findAnswerInput()?.classList.remove(WRONG_CLASS, CORRECT_CLASS);
+		findAnswerConsole()?.classList.remove(BUNPRO_INCORRECT_CLASS, BUNPRO_CORRECT_CLASS);
+	}
+	function shake(input) {
+		input.classList.remove(SHAKE_CLASS);
+		input.offsetWidth;
+		input.classList.add(SHAKE_CLASS);
+	}
+	function watchField(input) {
+		if (input.dataset[WATCHED_ATTRIBUTE]) return;
+		input.dataset[WATCHED_ATTRIBUTE] = "true";
+		input.addEventListener("input", clearMark);
+		input.addEventListener("animationend", () => input.classList.remove(SHAKE_CLASS));
+	}
 	function shouldOfferSynonym(state) {
 		return state.reviewable?.type === "vocab" && state.inputMode === "manual" && state.questionMode === "translate" && state.isPostAttempt && !state.isCorrect && synonymWorthAdding(state.submittedAnswer ?? "", state.answers);
 	}
@@ -524,7 +586,7 @@ input.bb-wrong-guess {
 	var addSynonymFeature = {
 		id: "add-synonym",
 		title: "Add a wrong answer as a synonym",
-		description: "After you miss a vocab translation, Bunpro hides \"Your Synonyms\" down in More Info. With this on, an Add as synonym button sits next to the wrong answer so you can accept what you typed without scrolling. The guess is saved through the same request Bunpro's own synonym field uses, and a guess it already accepts is not offered again.",
+		description: "After you miss a vocab translation, Bunpro hides \"Your Synonyms\" down in More Info. With this on, an Add as synonym button sits next to the wrong answer so you can accept what you typed without scrolling. Adding it also marks this review correct: the field turns green, and Enter submits a pass. The guess is saved through the same request Bunpro's own synonym field uses, and a guess it already accepts is not offered again.",
 		enabledByDefault: true,
 		start() {
 			injectStyles();
@@ -545,6 +607,8 @@ input.bb-wrong-guess {
 		}
 	};
 	function syncButton(state) {
+		const review = reviewKey(state);
+		if (review !== null && addedFor === review) markGuessCorrect();
 		if (!shouldOfferSynonym(state) || !findQuizArticle()) {
 			removeButton();
 			return;
@@ -571,6 +635,7 @@ input.bb-wrong-guess {
 				if (vocabId === void 0) throw new Error("No vocab id on the current review");
 				const outcome = await addUserSynonym(vocabId, synonym);
 				addedFor = review;
+				acceptAsCorrect(state, review, synonym);
 				return outcome === "already-there" ? "Already a synonym" : void 0;
 			}
 		});
@@ -578,6 +643,11 @@ input.bb-wrong-guess {
 			id: SLOT_ID,
 			class: "bb-add-synonym"
 		}, [button]);
+	}
+	function acceptAsCorrect(state, review, synonym) {
+		markGuessCorrect();
+		if (review !== null && synonym !== "") rememberAcceptedGuess(review, synonym, state.answers[0]?.trim() || synonym);
+		if (state.isPostAttempt && !state.isCorrect) findUndoButton()?.click();
 	}
 	function removeButton() {
 		document.getElementById(SLOT_ID)?.remove();
@@ -1197,34 +1267,6 @@ input.bb-wrong-guess {
 		const target = event.target;
 		if (target instanceof Node && claims.some((claim) => claim.node.contains(target))) event.stopPropagation();
 	}
-	var WRONG_CLASS = "bb-wrong-guess";
-	var SHAKE_CLASS = "bb-shaking";
-	var BUNPRO_INCORRECT_CLASS = "bp-quiz-console--incorrect";
-	var WATCHED_ATTRIBUTE = "bbWatched";
-	function markGuessWrong() {
-		const input = findAnswerInput();
-		const answerConsole = findAnswerConsole();
-		if (!input || !answerConsole) return;
-		watchField(input);
-		input.classList.add(WRONG_CLASS);
-		answerConsole.classList.add(BUNPRO_INCORRECT_CLASS);
-		shake(input);
-	}
-	function clearMark() {
-		findAnswerInput()?.classList.remove(WRONG_CLASS);
-		findAnswerConsole()?.classList.remove(BUNPRO_INCORRECT_CLASS);
-	}
-	function shake(input) {
-		input.classList.remove(SHAKE_CLASS);
-		input.offsetWidth;
-		input.classList.add(SHAKE_CLASS);
-	}
-	function watchField(input) {
-		if (input.dataset[WATCHED_ATTRIBUTE]) return;
-		input.dataset[WATCHED_ATTRIBUTE] = "true";
-		input.addEventListener("input", clearMark);
-		input.addEventListener("animationend", () => input.classList.remove(SHAKE_CLASS));
-	}
 	var TRANSLATION_SIMILARITY = .8;
 	var LATIN_LETTER = /[a-z]/i;
 	function gradeAnswer(questionMode, answers, typed) {
@@ -1301,6 +1343,12 @@ input.bb-wrong-guess {
 		const review = reviewKey(state);
 		if (!review) return false;
 		const guess = input.value.trim();
+		const official = takeAcceptedOfficial(review, guess);
+		if (official !== null) {
+			lastRejected = null;
+			if (official !== guess) fillAnswer(input, official);
+			return false;
+		}
 		if (lastRejected?.reviewKey === review && lastRejected.guess === guess) {
 			lastRejected = null;
 			return false;
@@ -1314,6 +1362,10 @@ input.bb-wrong-guess {
 	}
 	function isAwaitingTypedAnswer(state) {
 		return state.inputMode === "manual" && !state.isPostAttempt && !state.isRevealing;
+	}
+	function fillAnswer(input, value) {
+		input.value = value;
+		input.dispatchEvent(new Event("input", { bubbles: true }));
 	}
 	function hasModifier$1(event) {
 		return event.altKey || event.ctrlKey || event.metaKey || event.shiftKey;

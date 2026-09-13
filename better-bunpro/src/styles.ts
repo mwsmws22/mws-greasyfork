@@ -101,6 +101,9 @@ const CSS = `
 input.bb-wrong-guess {
   color: rgb(var(--c-incorrect) / 1);
 }
+input.bb-correct-guess {
+  color: rgb(var(--c-correct) / 1);
+}
 .bb-shaking {
   animation: bb-shake 320ms ease;
 }

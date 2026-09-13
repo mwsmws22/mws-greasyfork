@@ -66,6 +66,11 @@ export function findSubmitButton(): HTMLElement | null {
   return document.querySelector<HTMLElement>('.InputManual__button');
 }
 
+/** Retracts the last graded answer so the same review can be submitted again. */
+export function findUndoButton(): HTMLElement | null {
+  return document.querySelector('svg[data-name="UNDO"]')?.closest('button') ?? null;
+}
+
 /** The row around the field, which Bunpro outlines in red for a wrong answer. */
 export function findAnswerConsole(): HTMLElement | null {
   return document.querySelector<HTMLElement>('.InputManual');

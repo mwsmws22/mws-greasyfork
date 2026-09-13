@@ -1,10 +1,12 @@
-import { findQuizArticle, findQuizConsole } from '../../bunpro/quiz-dom';
+import { findQuizArticle, findQuizConsole, findUndoButton } from '../../bunpro/quiz-dom';
 import { readQuizState, watchQuizState, type QuizState } from '../../bunpro/quiz-state';
 import { reviewKey } from '../../bunpro/review';
 import { addUserSynonym } from '../../bunpro/synonyms';
 import { element } from '../../dom';
 import { injectStyles } from '../../styles';
 import { buildActionButton } from '../../ui/action-button';
+import { rememberAcceptedGuess } from '../keep-guessing/accepted-guess';
+import { markGuessCorrect } from '../keep-guessing/feedback';
 import type { Feature } from '../registry';
 import { shouldOfferSynonym } from './offer';
 
@@ -22,8 +24,9 @@ export const addSynonymFeature: Feature = {
   description:
     'After you miss a vocab translation, Bunpro hides "Your Synonyms" down in More Info. ' +
     'With this on, an Add as synonym button sits next to the wrong answer so you can accept ' +
-    'what you typed without scrolling. The guess is saved through the same request Bunpro\'s ' +
-    'own synonym field uses, and a guess it already accepts is not offered again.',
+    'what you typed without scrolling. Adding it also marks this review correct: the field ' +
+    'turns green, and Enter submits a pass. The guess is saved through the same request ' +
+    "Bunpro's own synonym field uses, and a guess it already accepts is not offered again.",
   enabledByDefault: true,
 
   start() {
@@ -44,6 +47,10 @@ export const addSynonymFeature: Feature = {
 };
 
 function syncButton(state: QuizState): void {
+  const review = reviewKey(state);
+  if (review !== null && addedFor === review) {
+    markGuessCorrect();
+  }
   if (!shouldOfferSynonym(state) || !findQuizArticle()) {
     removeButton();
     return;
@@ -78,11 +85,23 @@ function buildSlot(state: QuizState): HTMLElement {
       }
       const outcome = await addUserSynonym(vocabId, synonym);
       addedFor = review;
+      acceptAsCorrect(state, review, synonym);
       return outcome === 'already-there' ? 'Already a synonym' : undefined;
     },
   });
 
   return element('div', { id: SLOT_ID, class: 'bb-add-synonym' }, [button]);
+}
+
+function acceptAsCorrect(state: QuizState, review: string | null, synonym: string): void {
+  markGuessCorrect();
+  if (review !== null && synonym !== '') {
+    const official = state.answers[0]?.trim() || synonym;
+    rememberAcceptedGuess(review, synonym, official);
+  }
+  if (state.isPostAttempt && !state.isCorrect) {
+    findUndoButton()?.click();
+  }
 }
 
 function removeButton(): void {
