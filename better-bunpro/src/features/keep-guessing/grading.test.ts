@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { gradeAnswer, normalize, similarity } from './grading';
+import { normalize } from '../../bunpro/answer-text';
+import { gradeAnswer, similarity } from './grading';
 
 /** The answers Bunpro offered for 度胸がある, taken from a real review. */
 const TRANSLATIONS = ['to have guts', 'to be plucky', 'to have nerves of steel'];

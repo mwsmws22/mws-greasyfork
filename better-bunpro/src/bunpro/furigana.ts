@@ -7,7 +7,7 @@
  * literally, the look-alike full-width symbols do not survive text
  * normalisation, which silently turns the pattern into an invalid range.
  */
-import { HIRAGANA, JAPANESE, KANJI } from './japanese';
+import { HIRAGANA, JAPANESE, KANJI } from '../japanese/characters';
 
 /** ヶ also takes a reading, though it is not itself a kanji. */
 const ANNOTATABLE = `${KANJI}\\u30F6`;
@@ -35,6 +35,22 @@ const ALL_FULL_WIDTH = new RegExp(`^[${FULL_WIDTH_ALNUM}${SYMBOLS}${FULL_WIDTH_C
 export function furiganaToRuby(text: string): string {
   return text.replace(FURIGANA_PAIR, (pair, base: string, reading: string) =>
     canAnnotate(base, reading) ? toRuby(base, reading) : pair,
+  );
+}
+
+/** The word as it is written, with the readings dropped: `食（た）べる` -> `食べる`. */
+export function furiganaToWritten(text: string): string {
+  return dropAnnotations(text, (base) => base);
+}
+
+/** The word as it is read, with the kanji replaced: `食（た）べる` -> `たべる`. */
+export function furiganaToReading(text: string): string {
+  return dropAnnotations(text, (_base, reading) => reading);
+}
+
+function dropAnnotations(text: string, keep: (base: string, reading: string) => string): string {
+  return text.replace(FURIGANA_PAIR, (pair, base: string, reading: string) =>
+    canAnnotate(base, reading) ? keep(base, reading) : pair,
   );
 }
 

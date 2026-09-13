@@ -1,12 +1,11 @@
+import {
+  attributesOf,
+  bunproLocale,
+  bunproRequest,
+  includedOfType,
+  type JsonApiDocument,
+} from './api-request';
 import type { ReviewableRef } from './quiz-state';
-
-/**
- * Bunpro's own frontend authenticates against this host with a token it keeps
- * in a readable cookie, so we can reuse the signed-in session as-is.
- */
-const API_BASE = 'https://api.bunpro.jp/api/frontend';
-const TOKEN_COOKIE = 'frontend_api_token';
-const LOCALE_COOKIE = 'locale';
 
 export interface StudyQuestion {
   id: number;
@@ -34,13 +33,13 @@ export interface Reviewable {
   female_audio_url: string | null;
 }
 
-const inFlight = new Map<string, Promise<JsonApiPayload>>();
+const inFlight = new Map<string, Promise<JsonApiDocument>>();
 
 /**
  * One request per item answers everything we ask about it, so the readers below
  * are free to be called as often as a feature likes.
  */
-function fetchItem(reviewable: ReviewableRef): Promise<JsonApiPayload> {
+function fetchItem(reviewable: ReviewableRef): Promise<JsonApiDocument> {
   const key = `${reviewable.type}:${reviewable.id}`;
   let request = inFlight.get(key);
   if (!request) {
@@ -55,57 +54,22 @@ export async function fetchStudyQuestions(reviewable: ReviewableRef): Promise<St
 }
 
 export async function fetchReviewable(reviewable: ReviewableRef): Promise<Reviewable | null> {
-  const attributes = (await fetchItem(reviewable)).data?.attributes;
+  const attributes = attributesOf(await fetchItem(reviewable));
   return attributes ? (attributes as unknown as Reviewable) : null;
 }
 
-async function requestItem(reviewable: ReviewableRef): Promise<JsonApiPayload> {
-  const token = readCookie(TOKEN_COOKIE);
-  if (!token) {
-    throw new Error(`No ${TOKEN_COOKIE} cookie found; are you signed in to Bunpro?`);
-  }
-
-  const locale = readCookie(LOCALE_COOKIE) ?? 'en';
-  const url = `${API_BASE}/reviewables/${reviewable.type}/${reviewable.id}?locale=${locale}`;
-  const response = await fetch(url, {
-    credentials: 'omit',
-    headers: {
-      Accept: 'application/json',
-      Authorization: `Token token=${token}`,
-    },
-  });
-  if (!response.ok) {
-    throw new Error(`${url} responded ${response.status}`);
-  }
-
-  return (await response.json()) as JsonApiPayload;
+async function requestItem(reviewable: ReviewableRef): Promise<JsonApiDocument> {
+  const path = `/reviewables/${reviewable.type}/${reviewable.id}?locale=${bunproLocale()}`;
+  return bunproRequest<JsonApiDocument>(path);
 }
 
-interface JsonApiEntry {
-  id?: string;
-  type?: string;
-  attributes?: Record<string, unknown>;
-}
-
-interface JsonApiPayload {
-  data?: JsonApiEntry;
-  included?: JsonApiEntry[];
-}
-
-function collectStudyQuestions(payload: JsonApiPayload): StudyQuestion[] {
+function collectStudyQuestions(payload: JsonApiDocument | null): StudyQuestion[] {
   const sentences: StudyQuestion[] = [];
-  for (const entry of payload.included ?? []) {
-    if (entry.type !== 'study_question' || !entry.attributes) {
-      continue;
-    }
-    const attributes = entry.attributes;
+  for (const attributes of includedOfType(payload, 'study_question')) {
     if (typeof attributes.content !== 'string') {
       continue;
     }
-    sentences.push({
-      ...(attributes as unknown as StudyQuestion),
-      id: typeof attributes.id === 'number' ? attributes.id : Number(entry.id),
-    });
+    sentences.push(attributes as unknown as StudyQuestion);
   }
   return sentences.sort(bySentenceOrder);
 }
@@ -115,19 +79,4 @@ function bySentenceOrder(left: StudyQuestion, right: StudyQuestion): number {
   const leftOrder = left.sentence_order ?? Number.MAX_SAFE_INTEGER;
   const rightOrder = right.sentence_order ?? Number.MAX_SAFE_INTEGER;
   return leftOrder - rightOrder;
-}
-
-function readCookie(name: string): string | null {
-  for (const pair of document.cookie.split(';')) {
-    const separator = pair.indexOf('=');
-    if (separator === -1) {
-      continue;
-    }
-    if (pair.slice(0, separator).trim() !== name) {
-      continue;
-    }
-    const value = decodeURIComponent(pair.slice(separator + 1)).trim();
-    return value === '' ? null : value;
-  }
-  return null;
 }
