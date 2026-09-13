@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Better Bunpro
 // @namespace    mwsmws22
-// @version      0.1.11
+// @version      0.1.12
 // @author       mwsmws22
 // @description  Features I wish Bunpro had. Show example sentences for A1+ vocab after a correct answer, and more.
 // @license      MIT
@@ -380,6 +380,15 @@
 		if (previous.sessionId === sessionId) return previous.index % count;
 		return (previous.index + 1) % count;
 	}
+	function termToPrefetch(state) {
+		if (state.reviewable?.type !== "vocab" || state.questionMode !== "translate") return null;
+		return state.sessionId ? state.reviewable : null;
+	}
+	function termToShow(state, hasNativeSentence) {
+		const term = termToPrefetch(state);
+		if (!term || !state.isRevealing || !state.isCorrect || hasNativeSentence) return null;
+		return term;
+	}
 	var stopWatchingQuiz = null;
 	var sectionObserver = null;
 	var mountedFor = null;
@@ -400,7 +409,9 @@
 		}
 	};
 	function onQuizStateChange(state) {
-		const term = termNeedingSentence(state);
+		const upcoming = termToPrefetch(state);
+		if (upcoming) loadSentences(upcoming);
+		const term = termToShow(state, hasNativeSentenceCard());
 		if (!term || !state.sessionId) {
 			unmountCard();
 			return;
@@ -409,11 +420,6 @@
 		if (mountedFor === mountKey) return;
 		unmountCard();
 		mountSentenceFor(term, state.sessionId);
-	}
-	function termNeedingSentence(state) {
-		if (state.reviewable?.type !== "vocab" || state.questionMode !== "translate") return null;
-		if (!state.isRevealing || !state.isCorrect || hasNativeSentenceCard()) return null;
-		return state.reviewable;
 	}
 	async function mountSentenceFor(term, sessionId) {
 		const mountKey = mountKeyFor(term, sessionId);
@@ -456,7 +462,7 @@
 	}
 	function currentMountKey() {
 		const state = readQuizState();
-		const term = termNeedingSentence(state);
+		const term = termToShow(state, hasNativeSentenceCard());
 		return term && state.sessionId ? mountKeyFor(term, state.sessionId) : null;
 	}
 	function mountKeyFor(term, sessionId) {

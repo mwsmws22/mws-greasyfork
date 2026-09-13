@@ -10,6 +10,7 @@ import { injectStyles } from '../../styles';
 import type { Feature } from '../registry';
 import { buildSentenceCard, CARD_MARKER } from './card';
 import { pickSentenceIndex } from './rotation';
+import { termToPrefetch, termToShow } from './timing';
 
 let stopWatchingQuiz: (() => void) | null = null;
 let sectionObserver: MutationObserver | null = null;
@@ -42,7 +43,12 @@ export const exampleSentenceFeature: Feature = {
 };
 
 function onQuizStateChange(state: QuizState): void {
-  const term = termNeedingSentence(state);
+  const upcoming = termToPrefetch(state);
+  if (upcoming) {
+    void loadSentences(upcoming);
+  }
+
+  const term = termToShow(state, hasNativeSentenceCard());
   if (!term || !state.sessionId) {
     unmountCard();
     return;
@@ -54,17 +60,6 @@ function onQuizStateChange(state: QuizState): void {
   }
   unmountCard();
   void mountSentenceFor(term, state.sessionId);
-}
-
-/** Only correctly answered, revealed vocab that Bunpro itself left without a sentence. */
-function termNeedingSentence(state: QuizState): ReviewableRef | null {
-  if (state.reviewable?.type !== 'vocab' || state.questionMode !== 'translate') {
-    return null;
-  }
-  if (!state.isRevealing || !state.isCorrect || hasNativeSentenceCard()) {
-    return null;
-  }
-  return state.reviewable;
 }
 
 async function mountSentenceFor(term: ReviewableRef, sessionId: string): Promise<void> {
@@ -130,7 +125,7 @@ function unmountCard(): void {
 
 function currentMountKey(): string | null {
   const state = readQuizState();
-  const term = termNeedingSentence(state);
+  const term = termToShow(state, hasNativeSentenceCard());
   return term && state.sessionId ? mountKeyFor(term, state.sessionId) : null;
 }
 
