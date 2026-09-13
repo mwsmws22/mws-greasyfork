@@ -579,6 +579,8 @@
  */
 input.bb-wrong-guess {
   color: rgb(var(--c-incorrect) / 1);
+}
+.bb-shaking {
   animation: bb-shake 320ms ease;
 }
 @keyframes bb-shake {
@@ -757,27 +759,33 @@ input.bb-wrong-guess {
 		paint();
 		return button;
 	}
-	var SHAKE_CLASS = "bb-wrong-guess";
+	var WRONG_CLASS = "bb-wrong-guess";
+	var SHAKE_CLASS = "bb-shaking";
 	var BUNPRO_INCORRECT_CLASS = "bp-quiz-console--incorrect";
-	var WATCHED_ATTRIBUTE = "bbFlashing";
-	function flashWrongGuess() {
+	var WATCHED_ATTRIBUTE = "bbWatched";
+	function markGuessWrong() {
 		const input = findAnswerInput();
 		const answerConsole = findAnswerConsole();
 		if (!input || !answerConsole) return;
-		clearFlash();
-		input.offsetWidth;
-		watchForFlashEnd(input);
-		input.classList.add(SHAKE_CLASS);
+		watchField(input);
+		input.classList.add(WRONG_CLASS);
 		answerConsole.classList.add(BUNPRO_INCORRECT_CLASS);
+		shake(input);
 	}
-	function clearFlash() {
-		findAnswerInput()?.classList.remove(SHAKE_CLASS);
+	function clearMark() {
+		findAnswerInput()?.classList.remove(WRONG_CLASS);
 		findAnswerConsole()?.classList.remove(BUNPRO_INCORRECT_CLASS);
 	}
-	function watchForFlashEnd(input) {
+	function shake(input) {
+		input.classList.remove(SHAKE_CLASS);
+		input.offsetWidth;
+		input.classList.add(SHAKE_CLASS);
+	}
+	function watchField(input) {
 		if (input.dataset[WATCHED_ATTRIBUTE]) return;
 		input.dataset[WATCHED_ATTRIBUTE] = "true";
-		input.addEventListener("animationend", clearFlash);
+		input.addEventListener("input", clearMark);
+		input.addEventListener("animationend", () => input.classList.remove(SHAKE_CLASS));
 	}
 	var TRANSLATION_SIMILARITY = .8;
 	var LATIN_LETTER = /[a-z]/i;
@@ -858,7 +866,7 @@ input.bb-wrong-guess {
 		if (!isWrongGuess()) return;
 		event.preventDefault();
 		event.stopPropagation();
-		flashWrongGuess();
+		markGuessWrong();
 	}
 	function isWrongGuess() {
 		const input = findAnswerInput();

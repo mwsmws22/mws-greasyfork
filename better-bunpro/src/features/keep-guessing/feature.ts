@@ -4,7 +4,7 @@ import { reviewKey } from '../../bunpro/review';
 import { isSettingsPanelOpen } from '../../settings/panel';
 import { injectStyles } from '../../styles';
 import type { Feature } from '../registry';
-import { flashWrongGuess } from './flash';
+import { markGuessWrong } from './feedback';
 import { gradeAnswer } from './grading';
 
 const SUBMIT_KEY = 'Enter';
@@ -62,7 +62,7 @@ function swallowIfWrong(event: Event): void {
   }
   event.preventDefault();
   event.stopPropagation();
-  flashWrongGuess();
+  markGuessWrong();
 }
 
 function isWrongGuess(): boolean {
