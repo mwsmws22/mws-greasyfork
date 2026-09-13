@@ -7,7 +7,7 @@
  * handled exactly as it is without this feature, whereas a wrongly `rejected`
  * answer would leave a correct answer refusing to submit.
  */
-import { isJapanese } from '../../bunpro/japanese';
+import { normalize } from '../../bunpro/answer-text';
 
 export type Grade = 'accepted' | 'rejected' | 'unknown';
 
@@ -87,22 +87,4 @@ function distance(left: string, right: string): number {
 
   /** An empty target has no row to fill: every character of `left` is deleted. */
   return row[target.length - 1] ?? left.length;
-}
-
-const LIGATURES: Record<string, string> = { æ: 'ae', œ: 'oe', ß: 'ss' };
-
-/** Bunpro lowercases, strips accents, then trims. */
-export function normalize(text: string): string {
-  return [...text.toLowerCase()].map(foldLetter).join('').trim();
-}
-
-/**
- * Japanese is left alone: decomposing it would split the dakuten off が and stop
- * it matching the が in an answer.
- */
-function foldLetter(letter: string): string {
-  if (isJapanese(letter)) {
-    return letter;
-  }
-  return (LIGATURES[letter] ?? letter).normalize('NFD').replace(/[\u0300-\u036f]/g, '');
 }
