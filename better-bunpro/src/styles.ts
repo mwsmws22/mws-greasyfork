@@ -54,6 +54,8 @@ const CSS = `
   min-width: 0;
 }
 .bb-feature-about-summary {
+  display: flex;
+  align-items: center;
   cursor: pointer;
   list-style: none;
   user-select: none;
@@ -63,13 +65,12 @@ const CSS = `
 }
 .bb-feature-about-summary::after {
   content: '▸';
-  display: inline-block;
+  flex-shrink: 0;
   margin-left: 0.5em;
   color: rgb(var(--c-primary-accent) / 1);
   font-size: 1.15em;
   font-weight: normal;
   line-height: 1;
-  vertical-align: -0.05em;
 }
 .bb-feature-about[open] > .bb-feature-about-summary::after {
   content: '▾';

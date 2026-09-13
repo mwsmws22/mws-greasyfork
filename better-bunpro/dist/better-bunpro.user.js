@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Better Bunpro
 // @namespace    mwsmws22
-// @version      0.1.9
+// @version      0.1.10
 // @author       mwsmws22
 // @description  Features I wish Bunpro had. Show example sentences for A1+ vocab after a correct answer, and more.
 // @license      MIT
@@ -241,6 +241,8 @@
   min-width: 0;
 }
 .bb-feature-about-summary {
+  display: flex;
+  align-items: center;
   cursor: pointer;
   list-style: none;
   user-select: none;
@@ -250,13 +252,12 @@
 }
 .bb-feature-about-summary::after {
   content: '▸';
-  display: inline-block;
+  flex-shrink: 0;
   margin-left: 0.5em;
   color: rgb(var(--c-primary-accent) / 1);
   font-size: 1.15em;
   font-weight: normal;
   line-height: 1;
-  vertical-align: -0.05em;
 }
 .bb-feature-about[open] > .bb-feature-about-summary::after {
   content: '▾';
