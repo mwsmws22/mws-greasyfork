@@ -84,7 +84,7 @@ async function loadSentences(term: ReviewableRef): Promise<StudyQuestion[]> {
   } catch (error) {
     if (!hasWarned) {
       hasWarned = true;
-      console.warn('[Bunpro Review Tweaks] Could not load example sentences:', error);
+      console.warn('[Better Bunpro] Could not load example sentences:', error);
     }
     return [];
   }

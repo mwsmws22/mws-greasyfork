@@ -46,11 +46,11 @@ Tampermonkey script for Pal System meal kit pages. It checks your Paperless docu
 
 ---
 
-### bunpro-review-tweaks/
+### better-bunpro/
 
 Tampermonkey script for [Bunpro](https://bunpro.jp) reviews. Unlike the other two scripts this one is a
 small TypeScript project built with [vite-plugin-monkey](https://github.com/lisonge/vite-plugin-monkey);
-the file to publish is the built `dist/bunpro-review-tweaks.user.js`.
+the file to publish is the built `dist/better-bunpro.user.js`.
 
 **Target page:**
 
@@ -84,10 +84,10 @@ icons, or from `Settings` in the Tampermonkey menu. Feature toggles persist via 
 **Development:**
 
 ```shell
-cd bunpro-review-tweaks
+cd better-bunpro
 npm install
 npm run dev        # serves the script with live reload
 npm test           # furigana / sentence rendering tests
 npm run typecheck
-npm run build      # writes dist/bunpro-review-tweaks.user.js
+npm run build      # writes dist/better-bunpro.user.js
 ```

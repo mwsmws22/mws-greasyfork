@@ -6,7 +6,7 @@ import { element, svgIcon } from '../../dom';
  * Class strings are lifted from Bunpro's own sentence card at its `small` size
  * preset, so an injected card is indistinguishable from one they shipped.
  */
-const SLOT_CLASS = 'brt-sentence-slot mx-auto mt-8 w-fit sm:mt-0 animate-fade-in';
+const SLOT_CLASS = 'bb-sentence-slot mx-auto mt-8 w-fit sm:mt-0 animate-fade-in';
 const CARD_CLASS =
   'not-prose relative my-0 block overflow-hidden rounded-normal border align-top ' +
   'sm:flex sm:items-center sm:justify-between gap-8 px-12 py-8 sm:p-16 sm:gap-12 sm:pt-12 ' +
@@ -20,7 +20,7 @@ const PLAY_CIRCLE_PATH =
   'M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2m-2 13.5v-7a.5.5 0 0 1 ' +
   '.8-.4l4.67 3.5c.27.2.27.6 0 .8l-4.67 3.5a.5.5 0 0 1-.8-.4';
 
-export const CARD_MARKER = 'data-brt-sentence-card';
+export const CARD_MARKER = 'data-bb-sentence-card';
 
 export function buildSentenceCard(sentence: StudyQuestion): HTMLElement {
   const japanese = element('p', {
@@ -35,7 +35,7 @@ export function buildSentenceCard(sentence: StudyQuestion): HTMLElement {
   const audioUrl = sentence.female_audio_url ?? sentence.male_audio_url;
   const card = element(
     'aside',
-    { class: CARD_CLASS, 'data-brt-study-question': String(sentence.id) },
+    { class: CARD_CLASS, 'data-bb-study-question': String(sentence.id) },
     audioUrl ? [buildAudioButton(audioUrl), textColumn] : [textColumn],
   );
 

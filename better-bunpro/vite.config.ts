@@ -9,7 +9,7 @@ export default defineConfig({
     monkey({
       entry: 'src/main.ts',
       userscript: {
-        name: 'Bunpro Review Tweaks',
+        name: 'Better Bunpro',
         namespace: 'mwsmws22',
         author: 'mwsmws22',
         license: 'MIT',
@@ -21,7 +21,7 @@ export default defineConfig({
         'run-at': 'document-idle',
       },
       build: {
-        fileName: 'bunpro-review-tweaks.user.js',
+        fileName: 'better-bunpro.user.js',
         metaFileName: true,
       },
     }),

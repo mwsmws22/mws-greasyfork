@@ -1,5 +1,5 @@
 // ==UserScript==
-// @name         Bunpro Review Tweaks
+// @name         Better Bunpro
 // @namespace    mwsmws22
 // @version      0.1.0
 // @author       mwsmws22

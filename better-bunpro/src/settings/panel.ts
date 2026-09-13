@@ -2,9 +2,9 @@ import { element, svgIcon } from '../dom';
 import { isFeatureEnabled, listFeatures, setFeatureEnabled, type Feature } from '../features/registry';
 import { injectStyles } from '../styles';
 
-const PANEL_ID = 'brt-settings-panel';
+const PANEL_ID = 'bb-settings-panel';
 const CARD_CLASS =
-  'brt-panel-card relative z-1 flex flex-col overflow-hidden rounded-normal border ' +
+  'bb-panel-card relative z-1 flex flex-col overflow-hidden rounded-normal border ' +
   'border-rim bg-secondary-bg text-primary-fg shadow-normal';
 const CLOSE_SHAPES =
   '<path d="M6 6 18 18M18 6 6 18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>';
@@ -18,7 +18,7 @@ export function toggleSettingsPanel(): void {
   injectStyles();
   const panel = buildPanel();
   document.body.append(panel);
-  panel.querySelector<HTMLElement>('.brt-panel-card')?.focus();
+  panel.querySelector<HTMLElement>('.bb-panel-card')?.focus();
 }
 
 function closePanel(): void {
@@ -27,7 +27,7 @@ function closePanel(): void {
 
 function buildPanel(): HTMLElement {
   const backdrop = element('button', {
-    class: 'brt-backdrop absolute inset-0',
+    class: 'bb-backdrop absolute inset-0',
     'aria-label': 'Close settings',
   });
   backdrop.addEventListener('click', closePanel);
@@ -70,7 +70,7 @@ function buildHeader(): HTMLElement {
   return element(
     'header',
     { class: 'flex items-center justify-between gap-16 border-b border-rim p-16' },
-    [element('h2', { class: 'text-large font-bold' }, ['Bunpro Review Tweaks']), close],
+    [element('h2', { class: 'text-large font-bold' }, ['Better Bunpro']), close],
   );
 }
 
@@ -95,7 +95,7 @@ function buildSwitch(feature: Feature): HTMLElement {
   const paint = () => {
     const enabled = isFeatureEnabled(feature);
     button.setAttribute('aria-checked', String(enabled));
-    button.className = `brt-switch ${enabled ? 'bg-primary-accent' : 'bg-tertiary-bg'}`;
+    button.className = `bb-switch ${enabled ? 'bg-primary-accent' : 'bg-tertiary-bg'}`;
   };
 
   button.addEventListener('click', () => {

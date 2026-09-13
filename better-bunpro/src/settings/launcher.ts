@@ -3,7 +3,7 @@ import { findQuizToolbar } from '../bunpro/quiz-dom';
 import { element, svgIcon } from '../dom';
 import { toggleSettingsPanel } from './panel';
 
-const LAUNCHER_MARKER = 'data-brt-launcher';
+const LAUNCHER_MARKER = 'data-bb-launcher';
 
 /** Sliders, so it reads as ours next to Bunpro's own gear and palette icons. */
 const TUNE_SHAPES = `<g fill="currentColor">
@@ -38,7 +38,7 @@ function buildToolbarButton(): HTMLElement {
 
   const button = element(
     'button',
-    { class: 'block', title: 'Bunpro Review Tweaks settings', 'aria-haspopup': 'dialog' },
+    { class: 'block', title: 'Better Bunpro settings', 'aria-haspopup': 'dialog' },
     [
       element('div', { class: 'bp-hover-bg__child rounded-normal', style: 'font-size: 2.25rem;' }, [
         element(

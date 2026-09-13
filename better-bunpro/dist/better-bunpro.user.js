@@ -1,5 +1,5 @@
 // ==UserScript==
-// @name         Bunpro Review Tweaks
+// @name         Better Bunpro
 // @namespace    mwsmws22
 // @version      0.1.0
 // @author       mwsmws22
@@ -189,26 +189,26 @@
 			return null;
 		}
 	}
-	var STYLE_ID = "brt-styles";
+	var STYLE_ID = "bb-styles";
 	var CSS = `
-.brt-sentence-slot {
+.bb-sentence-slot {
   min-width: min(100%, 31.25rem);
   min-height: 5.6875rem;
 }
 @media (min-width: 640px) {
-  .brt-sentence-slot {
+  .bb-sentence-slot {
     min-width: max(fit-content, 31.25rem);
     min-height: 6.875rem;
   }
 }
-.brt-backdrop {
+.bb-backdrop {
   background: rgb(0 0 0 / 0.5);
 }
-.brt-panel-card {
+.bb-panel-card {
   width: min(100%, 34rem);
   max-height: min(80dvh, 40rem);
 }
-.brt-switch {
+.bb-switch {
   position: relative;
   flex-shrink: 0;
   width: 2.75rem;
@@ -216,7 +216,7 @@
   border-radius: 9999px;
   transition: background-color 150ms ease;
 }
-.brt-switch::after {
+.bb-switch::after {
   content: '';
   position: absolute;
   top: 0.1875rem;
@@ -227,7 +227,7 @@
   background: rgb(var(--c-primary-bg) / 1);
   transition: transform 150ms ease;
 }
-.brt-switch[aria-checked='true']::after {
+.bb-switch[aria-checked='true']::after {
   transform: translateX(1.25rem);
 }
 `;
@@ -287,13 +287,13 @@
 		node.innerHTML = shapes;
 		return node;
 	}
-	var SLOT_CLASS = "brt-sentence-slot mx-auto mt-8 w-fit sm:mt-0 animate-fade-in";
+	var SLOT_CLASS = "bb-sentence-slot mx-auto mt-8 w-fit sm:mt-0 animate-fade-in";
 	var CARD_CLASS$1 = "not-prose relative my-0 block overflow-hidden rounded-normal border align-top sm:flex sm:items-center sm:justify-between gap-8 px-12 py-8 sm:p-16 sm:gap-12 sm:pt-12 bg-tertiary-bg/50 border-rim";
 	var TEXT_COLUMN_CLASS = "relative z-1 flex grow flex-col items-center justify-center gap-4 text-center";
 	var JAPANESE_CLASS = "bp-ddw text-body sm:text-large prose w-full";
 	var ENGLISH_CLASS = "bp-sdw text-extra-small sm:text-body prose w-full";
 	var PLAY_CIRCLE_PATH = "M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2m-2 13.5v-7a.5.5 0 0 1 .8-.4l4.67 3.5c.27.2.27.6 0 .8l-4.67 3.5a.5.5 0 0 1-.8-.4";
-	var CARD_MARKER = "data-brt-sentence-card";
+	var CARD_MARKER = "data-bb-sentence-card";
 	function buildSentenceCard(sentence) {
 		const japanese = element("p", {
 			class: JAPANESE_CLASS,
@@ -305,7 +305,7 @@
 		const audioUrl = sentence.female_audio_url ?? sentence.male_audio_url;
 		const card = element("aside", {
 			class: CARD_CLASS$1,
-			"data-brt-study-question": String(sentence.id)
+			"data-bb-study-question": String(sentence.id)
 		}, audioUrl ? [buildAudioButton(audioUrl), textColumn] : [textColumn]);
 		return element("div", {
 			class: SLOT_CLASS,
@@ -393,7 +393,7 @@
 		} catch (error) {
 			if (!hasWarned) {
 				hasWarned = true;
-				console.warn("[Bunpro Review Tweaks] Could not load example sentences:", error);
+				console.warn("[Better Bunpro] Could not load example sentences:", error);
 			}
 			return [];
 		}
@@ -408,7 +408,7 @@
 	function remountIfReactReplacesSection(section, mountKey, sentence) {
 		sectionObserver?.disconnect();
 		sectionObserver = new MutationObserver(() => {
-			if (mountedFor !== mountKey || section.querySelector(`[data-brt-sentence-card]`)) return;
+			if (mountedFor !== mountKey || section.querySelector(`[data-bb-sentence-card]`)) return;
 			section.append(buildSentenceCard(sentence));
 		});
 		sectionObserver.observe(section, { childList: true });
@@ -430,8 +430,8 @@
 	function termKey(term) {
 		return `${term.type}:${term.id}`;
 	}
-	var PANEL_ID = "brt-settings-panel";
-	var CARD_CLASS = "brt-panel-card relative z-1 flex flex-col overflow-hidden rounded-normal border border-rim bg-secondary-bg text-primary-fg shadow-normal";
+	var PANEL_ID = "bb-settings-panel";
+	var CARD_CLASS = "bb-panel-card relative z-1 flex flex-col overflow-hidden rounded-normal border border-rim bg-secondary-bg text-primary-fg shadow-normal";
 	var CLOSE_SHAPES = "<path d=\"M6 6 18 18M18 6 6 18\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\"/>";
 	function toggleSettingsPanel() {
 		const open = document.getElementById(PANEL_ID);
@@ -442,14 +442,14 @@
 		injectStyles();
 		const panel = buildPanel();
 		document.body.append(panel);
-		panel.querySelector(".brt-panel-card")?.focus();
+		panel.querySelector(".bb-panel-card")?.focus();
 	}
 	function closePanel() {
 		document.getElementById(PANEL_ID)?.remove();
 	}
 	function buildPanel() {
 		const backdrop = element("button", {
-			class: "brt-backdrop absolute inset-0",
+			class: "bb-backdrop absolute inset-0",
 			"aria-label": "Close settings"
 		});
 		backdrop.addEventListener("click", closePanel);
@@ -476,7 +476,7 @@
 			"aria-label": "Close"
 		}, [svgIcon("h-24 w-24", CLOSE_SHAPES)]);
 		close.addEventListener("click", closePanel);
-		return element("header", { class: "flex items-center justify-between gap-16 border-b border-rim p-16" }, [element("h2", { class: "text-large font-bold" }, ["Bunpro Review Tweaks"]), close]);
+		return element("header", { class: "flex items-center justify-between gap-16 border-b border-rim p-16" }, [element("h2", { class: "text-large font-bold" }, ["Better Bunpro"]), close]);
 	}
 	function buildFeatureList() {
 		return element("ul", { class: "grid gap-16" }, listFeatures().map(buildFeatureRow));
@@ -492,7 +492,7 @@
 		const paint = () => {
 			const enabled = isFeatureEnabled(feature);
 			button.setAttribute("aria-checked", String(enabled));
-			button.className = `brt-switch ${enabled ? "bg-primary-accent" : "bg-tertiary-bg"}`;
+			button.className = `bb-switch ${enabled ? "bg-primary-accent" : "bg-tertiary-bg"}`;
 		};
 		button.addEventListener("click", () => {
 			setFeatureEnabled(feature, !isFeatureEnabled(feature));
@@ -501,7 +501,7 @@
 		paint();
 		return button;
 	}
-	var LAUNCHER_MARKER = "data-brt-launcher";
+	var LAUNCHER_MARKER = "data-bb-launcher";
 	var TUNE_SHAPES = `<g fill="currentColor">
   <rect x="3" y="6" width="18" height="2" rx="1"/>
   <rect x="3" y="16" width="18" height="2" rx="1"/>
@@ -529,7 +529,7 @@
 		icon.setAttribute("style", "width: 0.666667em; height: 0.666667em;");
 		const button = element("button", {
 			class: "block",
-			title: "Bunpro Review Tweaks settings",
+			title: "Better Bunpro settings",
 			"aria-haspopup": "dialog"
 		}, [element("div", {
 			class: "bp-hover-bg__child rounded-normal",
