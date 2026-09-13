@@ -8,12 +8,14 @@ const STYLE_ID = 'bb-styles';
 const CSS = `
 .bb-sentence-slot {
   min-width: min(100%, 31.25rem);
-  min-height: 5.6875rem;
+  min-height: 6.5rem;
+  margin-top: 1.5rem;
 }
 @media (min-width: 640px) {
   .bb-sentence-slot {
     min-width: max(fit-content, 31.25rem);
-    min-height: 6.875rem;
+    min-height: 7.5rem;
+    margin-top: 2rem;
   }
 }
 .bb-backdrop {
@@ -44,6 +46,28 @@ const CSS = `
 }
 .bb-switch[aria-checked='true']::after {
   transform: translateX(1.25rem);
+}
+.bb-feature-copy {
+  display: grid;
+  gap: 0.5rem;
+  min-width: 0;
+}
+.bb-feature-about-summary {
+  cursor: pointer;
+  list-style: none;
+  user-select: none;
+}
+.bb-feature-about-summary::-webkit-details-marker {
+  display: none;
+}
+.bb-feature-about-summary::before {
+  content: '▸ ';
+}
+.bb-feature-about[open] > .bb-feature-about-summary::before {
+  content: '▾ ';
+}
+.bb-feature-desc {
+  margin-top: 0.5rem;
 }
 `;
 

@@ -3,18 +3,18 @@ import { studyQuestionToHtml } from '../../bunpro/sentence-html';
 import { element, svgIcon } from '../../dom';
 
 /**
- * Class strings are lifted from Bunpro's own sentence card at its `small` size
- * preset, so an injected card is indistinguishable from one they shipped.
+ * Class strings are lifted from Bunpro's own sentence card at its `medium` size
+ * preset (what the Examples list uses), so an injected card matches that look.
  */
-const SLOT_CLASS = 'bb-sentence-slot mx-auto mt-8 w-fit sm:mt-0 animate-fade-in';
+const SLOT_CLASS = 'bb-sentence-slot mx-auto w-fit animate-fade-in';
 const CARD_CLASS =
   'not-prose relative my-0 block overflow-hidden rounded-normal border align-top ' +
-  'sm:flex sm:items-center sm:justify-between gap-8 px-12 py-8 sm:p-16 sm:gap-12 sm:pt-12 ' +
+  'sm:flex sm:items-center sm:justify-between sm:gap-4 p-16 sm:p-24 ' +
   'bg-tertiary-bg/50 border-rim';
 const TEXT_COLUMN_CLASS =
   'relative z-1 flex grow flex-col items-center justify-center gap-4 text-center';
-const JAPANESE_CLASS = 'bp-ddw text-body sm:text-large prose w-full';
-const ENGLISH_CLASS = 'bp-sdw text-extra-small sm:text-body prose w-full';
+const JAPANESE_CLASS = 'bp-ddw text-large md:text-subtitle prose w-full';
+const ENGLISH_CLASS = 'bp-sdw text-body prose w-full';
 
 const PLAY_CIRCLE_PATH =
   'M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2m-2 13.5v-7a.5.5 0 0 1 ' +
@@ -29,7 +29,10 @@ export function buildSentenceCard(sentence: StudyQuestion): HTMLElement {
   });
   japanese.innerHTML = studyQuestionToHtml(sentence);
 
-  const english = element('p', { class: ENGLISH_CLASS }, [sentence.translation ?? '']);
+  /** Bunpro translations include markup such as <strong>; render as HTML. */
+  const english = element('p', { class: ENGLISH_CLASS });
+  english.innerHTML = sentence.translation ?? '';
+
   const textColumn = element('div', { class: TEXT_COLUMN_CLASS }, [japanese, english]);
 
   const audioUrl = sentence.female_audio_url ?? sentence.male_audio_url;
@@ -46,7 +49,7 @@ function buildAudioButton(audioUrl: string): HTMLElement {
   const icon = svgIcon('h-24 w-24', `<path d="${PLAY_CIRCLE_PATH}" fill="currentColor"/>`);
   const sizing = element(
     'div',
-    { class: 'bp-hover-bg__child rounded-normal', style: 'font-size: 1.625rem;' },
+    { class: 'bp-hover-bg__child rounded-normal', style: 'font-size: 2.25rem;' },
     [
       element(
         'div',

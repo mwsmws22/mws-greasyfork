@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Better Bunpro
 // @namespace    mwsmws22
-// @version      0.1.3
+// @version      0.1.5
 // @author       mwsmws22
 // @description  Features I wish Bunpro had. Show example sentences for A1+ vocab after a correct answer, and more.
 // @license      MIT
@@ -193,12 +193,14 @@
 	var CSS = `
 .bb-sentence-slot {
   min-width: min(100%, 31.25rem);
-  min-height: 5.6875rem;
+  min-height: 6.5rem;
+  margin-top: 1.5rem;
 }
 @media (min-width: 640px) {
   .bb-sentence-slot {
     min-width: max(fit-content, 31.25rem);
-    min-height: 6.875rem;
+    min-height: 7.5rem;
+    margin-top: 2rem;
   }
 }
 .bb-backdrop {
@@ -229,6 +231,28 @@
 }
 .bb-switch[aria-checked='true']::after {
   transform: translateX(1.25rem);
+}
+.bb-feature-copy {
+  display: grid;
+  gap: 0.5rem;
+  min-width: 0;
+}
+.bb-feature-about-summary {
+  cursor: pointer;
+  list-style: none;
+  user-select: none;
+}
+.bb-feature-about-summary::-webkit-details-marker {
+  display: none;
+}
+.bb-feature-about-summary::before {
+  content: '▸ ';
+}
+.bb-feature-about[open] > .bb-feature-about-summary::before {
+  content: '▾ ';
+}
+.bb-feature-desc {
+  margin-top: 0.5rem;
 }
 `;
 	function injectStyles() {
@@ -287,11 +311,11 @@
 		node.innerHTML = shapes;
 		return node;
 	}
-	var SLOT_CLASS = "bb-sentence-slot mx-auto mt-8 w-fit sm:mt-0 animate-fade-in";
-	var CARD_CLASS$1 = "not-prose relative my-0 block overflow-hidden rounded-normal border align-top sm:flex sm:items-center sm:justify-between gap-8 px-12 py-8 sm:p-16 sm:gap-12 sm:pt-12 bg-tertiary-bg/50 border-rim";
+	var SLOT_CLASS = "bb-sentence-slot mx-auto w-fit animate-fade-in";
+	var CARD_CLASS$1 = "not-prose relative my-0 block overflow-hidden rounded-normal border align-top sm:flex sm:items-center sm:justify-between sm:gap-4 p-16 sm:p-24 bg-tertiary-bg/50 border-rim";
 	var TEXT_COLUMN_CLASS = "relative z-1 flex grow flex-col items-center justify-center gap-4 text-center";
-	var JAPANESE_CLASS = "bp-ddw text-body sm:text-large prose w-full";
-	var ENGLISH_CLASS = "bp-sdw text-extra-small sm:text-body prose w-full";
+	var JAPANESE_CLASS = "bp-ddw text-large md:text-subtitle prose w-full";
+	var ENGLISH_CLASS = "bp-sdw text-body prose w-full";
 	var PLAY_CIRCLE_PATH = "M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2m-2 13.5v-7a.5.5 0 0 1 .8-.4l4.67 3.5c.27.2.27.6 0 .8l-4.67 3.5a.5.5 0 0 1-.8-.4";
 	var CARD_MARKER = "data-bb-sentence-card";
 	function buildSentenceCard(sentence) {
@@ -300,7 +324,8 @@
 			"data-force-furigana": "default"
 		});
 		japanese.innerHTML = studyQuestionToHtml(sentence);
-		const english = element("p", { class: ENGLISH_CLASS }, [sentence.translation ?? ""]);
+		const english = element("p", { class: ENGLISH_CLASS });
+		english.innerHTML = sentence.translation ?? "";
 		const textColumn = element("div", { class: TEXT_COLUMN_CLASS }, [japanese, english]);
 		const audioUrl = sentence.female_audio_url ?? sentence.male_audio_url;
 		const card = element("aside", {
@@ -318,7 +343,7 @@
 			title: "Play audio"
 		}, [element("div", {
 			class: "bp-hover-bg__child rounded-normal",
-			style: "font-size: 1.625rem;"
+			style: "font-size: 2.25rem;"
 		}, [element("div", {
 			class: "relative flex items-center justify-center",
 			style: "width: 1em; height: 1em;"
@@ -482,7 +507,9 @@
 		return element("ul", { class: "grid gap-16" }, listFeatures().map(buildFeatureRow));
 	}
 	function buildFeatureRow(feature) {
-		return element("li", { class: "flex items-start justify-between gap-16" }, [element("div", { class: "grid gap-2" }, [element("p", { class: "font-bold" }, [feature.title]), element("p", { class: "text-small text-tertiary-fg" }, [feature.description])]), buildSwitch(feature)]);
+		const description = element("p", { class: "bb-feature-desc text-small text-tertiary-fg" }, [feature.description]);
+		const about = element("details", { class: "bb-feature-about" }, [element("summary", { class: "bb-feature-about-summary text-small text-primary-accent" }, ["About"]), description]);
+		return element("li", { class: "flex items-start justify-between gap-16" }, [element("div", { class: "bb-feature-copy grow" }, [element("p", { class: "font-bold" }, [feature.title]), about]), buildSwitch(feature)]);
 	}
 	function buildSwitch(feature) {
 		const button = element("button", {

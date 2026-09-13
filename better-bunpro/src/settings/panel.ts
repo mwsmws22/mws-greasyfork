@@ -79,10 +79,21 @@ function buildFeatureList(): HTMLElement {
 }
 
 function buildFeatureRow(feature: Feature): HTMLElement {
-  const label = element('div', { class: 'grid gap-2' }, [
-    element('p', { class: 'font-bold' }, [feature.title]),
-    element('p', { class: 'text-small text-tertiary-fg' }, [feature.description]),
+  const description = element('p', { class: 'bb-feature-desc text-small text-tertiary-fg' }, [
+    feature.description,
   ]);
+  const about = element('details', { class: 'bb-feature-about' }, [
+    element('summary', { class: 'bb-feature-about-summary text-small text-primary-accent' }, [
+      'About',
+    ]),
+    description,
+  ]);
+
+  const label = element('div', { class: 'bb-feature-copy grow' }, [
+    element('p', { class: 'font-bold' }, [feature.title]),
+    about,
+  ]);
+
   return element('li', { class: 'flex items-start justify-between gap-16' }, [
     label,
     buildSwitch(feature),
