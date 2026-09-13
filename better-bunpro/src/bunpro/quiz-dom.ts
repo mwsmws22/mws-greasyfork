@@ -66,6 +66,11 @@ export function findSubmitButton(): HTMLElement | null {
   return document.querySelector<HTMLElement>('.InputManual__button');
 }
 
+/** The row around the field, which Bunpro outlines in red for a wrong answer. */
+export function findAnswerConsole(): HTMLElement | null {
+  return document.querySelector<HTMLElement>('.InputManual');
+}
+
 /** The row holding Bunpro's Exit / Quiz settings / Styling / Dictionary icons. */
 export function findQuizToolbar(): HTMLElement | null {
   const rows = document.querySelectorAll<HTMLElement>(`${QUIZ_ARTICLE} > header ul`);

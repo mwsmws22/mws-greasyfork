@@ -93,6 +93,9 @@
 	function findSubmitButton() {
 		return document.querySelector(".InputManual__button");
 	}
+	function findAnswerConsole() {
+		return document.querySelector(".InputManual");
+	}
 	function findQuizToolbar() {
 		const rows = document.querySelectorAll(`${QUIZ_ARTICLE} > header ul`);
 		for (const row of rows) if (row.querySelector("button, a")) return row;
@@ -569,7 +572,13 @@
 .bb-feature-desc {
   margin-top: 0.5rem;
 }
-.bb-wrong-guess {
+/**
+ * The element is named in the selector to outweigh the \`text-primary-fg\` Bunpro
+ * leaves on the field: Bunpro's stylesheets are linked after this one, so an
+ * equally specific rule of ours would lose.
+ */
+input.bb-wrong-guess {
+  color: rgb(var(--c-incorrect) / 1);
   animation: bb-shake 320ms ease;
 }
 @keyframes bb-shake {
@@ -749,23 +758,26 @@
 		return button;
 	}
 	var SHAKE_CLASS = "bb-wrong-guess";
-	var BUNPRO_INCORRECT_CLASS = "text-incorrect";
+	var BUNPRO_INCORRECT_CLASS = "bp-quiz-console--incorrect";
 	var WATCHED_ATTRIBUTE = "bbFlashing";
 	function flashWrongGuess() {
 		const input = findAnswerInput();
-		if (!input) return;
-		clearFlash(input);
+		const answerConsole = findAnswerConsole();
+		if (!input || !answerConsole) return;
+		clearFlash();
 		input.offsetWidth;
 		watchForFlashEnd(input);
-		input.classList.add(SHAKE_CLASS, BUNPRO_INCORRECT_CLASS);
+		input.classList.add(SHAKE_CLASS);
+		answerConsole.classList.add(BUNPRO_INCORRECT_CLASS);
 	}
-	function clearFlash(input) {
-		input.classList.remove(SHAKE_CLASS, BUNPRO_INCORRECT_CLASS);
+	function clearFlash() {
+		findAnswerInput()?.classList.remove(SHAKE_CLASS);
+		findAnswerConsole()?.classList.remove(BUNPRO_INCORRECT_CLASS);
 	}
 	function watchForFlashEnd(input) {
 		if (input.dataset[WATCHED_ATTRIBUTE]) return;
 		input.dataset[WATCHED_ATTRIBUTE] = "true";
-		input.addEventListener("animationend", () => clearFlash(input));
+		input.addEventListener("animationend", clearFlash);
 	}
 	var TRANSLATION_SIMILARITY = .8;
 	var LATIN_LETTER = /[a-z]/i;

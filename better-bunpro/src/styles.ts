@@ -77,7 +77,13 @@ const CSS = `
 .bb-feature-desc {
   margin-top: 0.5rem;
 }
-.bb-wrong-guess {
+/**
+ * The element is named in the selector to outweigh the \`text-primary-fg\` Bunpro
+ * leaves on the field: Bunpro's stylesheets are linked after this one, so an
+ * equally specific rule of ours would lose.
+ */
+input.bb-wrong-guess {
+  color: rgb(var(--c-incorrect) / 1);
   animation: bb-shake 320ms ease;
 }
 @keyframes bb-shake {
