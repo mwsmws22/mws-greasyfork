@@ -82,20 +82,13 @@ function buildFeatureRow(feature: Feature): HTMLElement {
   const description = element('p', { class: 'bb-feature-desc text-small text-tertiary-fg' }, [
     feature.description,
   ]);
-  const about = element('details', { class: 'bb-feature-about' }, [
-    element('summary', { class: 'bb-feature-about-summary text-small text-primary-accent' }, [
-      'About',
-    ]),
+  const about = element('details', { class: 'bb-feature-about grow' }, [
+    element('summary', { class: 'bb-feature-about-summary font-bold' }, [feature.title]),
     description,
   ]);
 
-  const label = element('div', { class: 'bb-feature-copy grow' }, [
-    element('p', { class: 'font-bold' }, [feature.title]),
-    about,
-  ]);
-
   return element('li', { class: 'flex items-start justify-between gap-16' }, [
-    label,
+    about,
     buildSwitch(feature),
   ]);
 }

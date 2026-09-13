@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Better Bunpro
 // @namespace    mwsmws22
-// @version      0.1.5
+// @version      0.1.6
 // @author       mwsmws22
 // @description  Features I wish Bunpro had. Show example sentences for A1+ vocab after a correct answer, and more.
 // @license      MIT
@@ -237,6 +237,9 @@
   gap: 0.5rem;
   min-width: 0;
 }
+.bb-feature-about {
+  min-width: 0;
+}
 .bb-feature-about-summary {
   cursor: pointer;
   list-style: none;
@@ -245,11 +248,13 @@
 .bb-feature-about-summary::-webkit-details-marker {
   display: none;
 }
-.bb-feature-about-summary::before {
-  content: '▸ ';
+.bb-feature-about-summary::after {
+  content: ' ▸';
+  color: rgb(var(--c-primary-accent) / 1);
+  font-weight: normal;
 }
-.bb-feature-about[open] > .bb-feature-about-summary::before {
-  content: '▾ ';
+.bb-feature-about[open] > .bb-feature-about-summary::after {
+  content: ' ▾';
 }
 .bb-feature-desc {
   margin-top: 0.5rem;
@@ -508,8 +513,7 @@
 	}
 	function buildFeatureRow(feature) {
 		const description = element("p", { class: "bb-feature-desc text-small text-tertiary-fg" }, [feature.description]);
-		const about = element("details", { class: "bb-feature-about" }, [element("summary", { class: "bb-feature-about-summary text-small text-primary-accent" }, ["About"]), description]);
-		return element("li", { class: "flex items-start justify-between gap-16" }, [element("div", { class: "bb-feature-copy grow" }, [element("p", { class: "font-bold" }, [feature.title]), about]), buildSwitch(feature)]);
+		return element("li", { class: "flex items-start justify-between gap-16" }, [element("details", { class: "bb-feature-about grow" }, [element("summary", { class: "bb-feature-about-summary font-bold" }, [feature.title]), description]), buildSwitch(feature)]);
 	}
 	function buildSwitch(feature) {
 		const button = element("button", {

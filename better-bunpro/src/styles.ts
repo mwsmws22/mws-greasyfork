@@ -52,6 +52,9 @@ const CSS = `
   gap: 0.5rem;
   min-width: 0;
 }
+.bb-feature-about {
+  min-width: 0;
+}
 .bb-feature-about-summary {
   cursor: pointer;
   list-style: none;
@@ -60,11 +63,13 @@ const CSS = `
 .bb-feature-about-summary::-webkit-details-marker {
   display: none;
 }
-.bb-feature-about-summary::before {
-  content: '▸ ';
+.bb-feature-about-summary::after {
+  content: ' ▸';
+  color: rgb(var(--c-primary-accent) / 1);
+  font-weight: normal;
 }
-.bb-feature-about[open] > .bb-feature-about-summary::before {
-  content: '▾ ';
+.bb-feature-about[open] > .bb-feature-about-summary::after {
+  content: ' ▾';
 }
 .bb-feature-desc {
   margin-top: 0.5rem;
