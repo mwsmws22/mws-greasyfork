@@ -7,7 +7,6 @@
 // @license      MIT
 // @match        https://bunpro.jp/*
 // @grant        GM_getValue
-// @grant        GM_info
 // @grant        GM_registerMenuCommand
 // @grant        GM_setValue
 // @run-at       document-idle

@@ -1,4 +1,4 @@
-import { GM_info } from '$';
+import { version } from '../../package.json' with { type: 'json' };
 import { element, svgIcon } from '../dom';
 import {
   isFeatureEnabled,
@@ -93,7 +93,7 @@ function buildHeader(): HTMLElement {
 }
 
 function scriptVersion(): string {
-  return GM_info?.script?.version ?? '0.0.0';
+  return version;
 }
 
 function buildFeatureList(): HTMLElement {

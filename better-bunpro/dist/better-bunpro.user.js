@@ -7,7 +7,6 @@
 // @license      MIT
 // @match        https://bunpro.jp/*
 // @grant        GM_getValue
-// @grant        GM_info
 // @grant        GM_registerMenuCommand
 // @grant        GM_setValue
 // @run-at       document-idle
@@ -16,7 +15,6 @@
 (function() {
 	"use strict";
 	var _GM_getValue = (() => typeof GM_getValue != "undefined" ? GM_getValue : void 0)();
-	var _GM_info = (() => typeof GM_info != "undefined" ? GM_info : void 0)();
 	var _GM_registerMenuCommand = (() => typeof GM_registerMenuCommand != "undefined" ? GM_registerMenuCommand : void 0)();
 	var _GM_setValue = (() => typeof GM_setValue != "undefined" ? GM_setValue : void 0)();
 	var listeners = new Set();
@@ -655,6 +653,7 @@
 			return holder.textContent ?? "";
 		});
 	}
+	var version = "0.2.1";
 	var PANEL_ID = "bb-settings-panel";
 	var CARD_CLASS = "bb-panel-card relative z-1 flex flex-col overflow-hidden rounded-normal border border-rim bg-secondary-bg text-primary-fg shadow-normal";
 	var CLOSE_SHAPES = "<path d=\"M6 6 18 18M18 6 6 18\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\"/>";
@@ -708,7 +707,7 @@
 		return element("header", { class: "flex items-center justify-between gap-16 border-b border-rim p-16" }, [element("div", { class: "flex items-baseline gap-8" }, [element("h2", { class: "text-large font-bold" }, ["Better Bunpro"]), element("span", { class: "text-small text-tertiary-fg" }, [`v${scriptVersion()}`])]), close]);
 	}
 	function scriptVersion() {
-		return _GM_info?.script?.version ?? "0.0.0";
+		return version;
 	}
 	function buildFeatureList() {
 		return element("ul", { class: "grid gap-16" }, listFeatures().map(buildFeatureRow));
