@@ -1,9 +1,9 @@
 // ==UserScript==
 // @name         Better Bunpro
 // @namespace    mwsmws22
-// @version      0.1.12
+// @version      0.2.0
 // @author       mwsmws22
-// @description  Features I wish Bunpro had. Show example sentences for A1+ vocab after a correct answer, and more.
+// @description  Features I wish Bunpro had. Show example sentences for A1+ vocab after a correct answer, cycle sentences with Tab, and more.
 // @license      MIT
 // @match        https://bunpro.jp/*
 // @grant        GM_getValue
@@ -60,66 +60,34 @@
 	function enabledKey(feature) {
 		return `feature.${feature.id}.enabled`;
 	}
-	var API_BASE = "https://api.bunpro.jp/api/frontend";
-	var TOKEN_COOKIE = "frontend_api_token";
-	var LOCALE_COOKIE = "locale";
-	var inFlight = new Map();
-	function fetchStudyQuestions(reviewable) {
-		const key = `${reviewable.type}:${reviewable.id}`;
-		let request = inFlight.get(key);
-		if (!request) {
-			request = requestStudyQuestions(reviewable);
-			inFlight.set(key, request);
-		}
-		return request;
-	}
-	async function requestStudyQuestions(reviewable) {
-		const token = readCookie(TOKEN_COOKIE);
-		if (!token) throw new Error(`No ${TOKEN_COOKIE} cookie found; are you signed in to Bunpro?`);
-		const locale = readCookie(LOCALE_COOKIE) ?? "en";
-		const url = `${API_BASE}/reviewables/${reviewable.type}/${reviewable.id}?locale=${locale}`;
-		const response = await fetch(url, {
-			credentials: "omit",
-			headers: {
-				Accept: "application/json",
-				Authorization: `Token token=${token}`
-			}
-		});
-		if (!response.ok) throw new Error(`${url} responded ${response.status}`);
-		return collectStudyQuestions(await response.json());
-	}
-	function collectStudyQuestions(payload) {
-		const sentences = [];
-		for (const entry of payload.included ?? []) {
-			if (entry.type !== "study_question" || !entry.attributes) continue;
-			const attributes = entry.attributes;
-			if (typeof attributes.content !== "string") continue;
-			sentences.push({
-				...attributes,
-				id: typeof attributes.id === "number" ? attributes.id : Number(entry.id)
-			});
-		}
-		return sentences.sort(bySentenceOrder);
-	}
-	function bySentenceOrder(left, right) {
-		return (left.sentence_order ?? Number.MAX_SAFE_INTEGER) - (right.sentence_order ?? Number.MAX_SAFE_INTEGER);
-	}
-	function readCookie(name) {
-		for (const pair of document.cookie.split(";")) {
-			const separator = pair.indexOf("=");
-			if (separator === -1) continue;
-			if (pair.slice(0, separator).trim() !== name) continue;
-			const value = decodeURIComponent(pair.slice(separator + 1)).trim();
-			return value === "" ? null : value;
-		}
-		return null;
-	}
 	var QUIZ_ARTICLE = "#js-quiz article:not(.bp-reviewable-root)";
+	function findQuizArticle() {
+		return document.querySelector(QUIZ_ARTICLE);
+	}
 	function findQuestionSection() {
 		return document.querySelector(`${QUIZ_ARTICLE} > section`);
 	}
+	function findClozeSentence() {
+		return document.querySelector(`${QUIZ_ARTICLE} .bp-quiz-question > .text-center`);
+	}
+	function findClozeTense() {
+		return document.querySelector(`${QUIZ_ARTICLE} .bp-quiz-question > p.bp-quiz-tense`);
+	}
+	function findQuestionTranslation() {
+		return document.querySelector(`${QUIZ_ARTICLE} .bp-quiz-trans:not(.bp-quiz-trans--hint)`);
+	}
+	var NATIVE_CARD_ID_PREFIX = "study-question-";
+	function findNativeSentenceCard() {
+		return document.querySelector(`${QUIZ_ARTICLE} > section aside[id^="${NATIVE_CARD_ID_PREFIX}"]`);
+	}
 	function hasNativeSentenceCard() {
-		return document.querySelector(`${QUIZ_ARTICLE} > section aside[id^="study-question-"]`) !== null;
+		return findNativeSentenceCard() !== null;
+	}
+	function nativeSentenceId() {
+		const card = findNativeSentenceCard();
+		if (!card) return null;
+		const id = Number(card.id.slice(15));
+		return Number.isFinite(id) ? id : null;
 	}
 	function findQuizToolbar() {
 		const rows = document.querySelectorAll(`${QUIZ_ARTICLE} > header ul`);
@@ -190,6 +158,319 @@
 		} catch {
 			return null;
 		}
+	}
+	var API_BASE = "https://api.bunpro.jp/api/frontend";
+	var TOKEN_COOKIE = "frontend_api_token";
+	var LOCALE_COOKIE = "locale";
+	var inFlight = new Map();
+	function fetchStudyQuestions(reviewable) {
+		const key = `${reviewable.type}:${reviewable.id}`;
+		let request = inFlight.get(key);
+		if (!request) {
+			request = requestStudyQuestions(reviewable);
+			inFlight.set(key, request);
+		}
+		return request;
+	}
+	async function requestStudyQuestions(reviewable) {
+		const token = readCookie(TOKEN_COOKIE);
+		if (!token) throw new Error(`No ${TOKEN_COOKIE} cookie found; are you signed in to Bunpro?`);
+		const locale = readCookie(LOCALE_COOKIE) ?? "en";
+		const url = `${API_BASE}/reviewables/${reviewable.type}/${reviewable.id}?locale=${locale}`;
+		const response = await fetch(url, {
+			credentials: "omit",
+			headers: {
+				Accept: "application/json",
+				Authorization: `Token token=${token}`
+			}
+		});
+		if (!response.ok) throw new Error(`${url} responded ${response.status}`);
+		return collectStudyQuestions(await response.json());
+	}
+	function collectStudyQuestions(payload) {
+		const sentences = [];
+		for (const entry of payload.included ?? []) {
+			if (entry.type !== "study_question" || !entry.attributes) continue;
+			const attributes = entry.attributes;
+			if (typeof attributes.content !== "string") continue;
+			sentences.push({
+				...attributes,
+				id: typeof attributes.id === "number" ? attributes.id : Number(entry.id)
+			});
+		}
+		return sentences.sort(bySentenceOrder);
+	}
+	function bySentenceOrder(left, right) {
+		return (left.sentence_order ?? Number.MAX_SAFE_INTEGER) - (right.sentence_order ?? Number.MAX_SAFE_INTEGER);
+	}
+	function readCookie(name) {
+		for (const pair of document.cookie.split(";")) {
+			const separator = pair.indexOf("=");
+			if (separator === -1) continue;
+			if (pair.slice(0, separator).trim() !== name) continue;
+			const value = decodeURIComponent(pair.slice(separator + 1)).trim();
+			return value === "" ? null : value;
+		}
+		return null;
+	}
+	var hasWarned = false;
+	async function loadSentences(term) {
+		try {
+			return await fetchStudyQuestions(term);
+		} catch (error) {
+			if (!hasWarned) {
+				hasWarned = true;
+				console.warn("[Better Bunpro] Could not load example sentences:", error);
+			}
+			return [];
+		}
+	}
+	function termKey(term) {
+		return `${term.type}:${term.id}`;
+	}
+	function reviewKey(state) {
+		const { reviewable, sessionId } = state;
+		return reviewable && sessionId ? `${termKey(reviewable)}@${sessionId}` : null;
+	}
+	function solvedReviewKey(state) {
+		return state.isRevealing && state.isCorrect ? reviewKey(state) : null;
+	}
+	var SVG_NAMESPACE = "http://www.w3.org/2000/svg";
+	function element(tag, attributes = {}, children = []) {
+		const node = document.createElement(tag);
+		for (const [name, value] of Object.entries(attributes)) node.setAttribute(name, value);
+		node.append(...children);
+		return node;
+	}
+	function svgIcon(className, shapes) {
+		const node = document.createElementNS(SVG_NAMESPACE, "svg");
+		node.setAttribute("viewBox", "0 0 24 24");
+		node.setAttribute("class", className);
+		node.setAttribute("aria-hidden", "true");
+		node.innerHTML = shapes;
+		return node;
+	}
+	var KANJI = `${String.raw`\u2E80-\u2E99\u2E9B-\u2EF3\u2F00-\u2FD5`}${String.raw`\u3005\u3007\u3021-\u3029\u3038-\u303B`}${String.raw`\u3400-\u4DBF\u4E00-\u9FFF`}${String.raw`\uF900-\uFA6D\uFA70-\uFAD9`}`;
+	var HIRAGANA = String.raw`\u3041-\u3096\u309D-\u309F`;
+	var JAPANESE = `${KANJI}${HIRAGANA}${String.raw`\u30A0-\u30FF\u30FC`}`;
+	var ANNOTATABLE = `${KANJI}\\u30F6`;
+	var FULL_WIDTH_DIGITS = String.raw`\uFF10-\uFF19`;
+	var FULL_WIDTH_ALNUM = String.raw`\uFF21-\uFF3A\uFF41-\uFF5A${FULL_WIDTH_DIGITS}`;
+	var FULL_WIDTH_COMMA = String.raw`\uFF0C`;
+	var SYMBOLS = String.raw`\uFF0E\uFF1A\u30FC\u301C\uFF05\uFF06\uFF20\u21D2\u2103\uFF0B\u03B2`;
+	var OPEN_PAREN = String.raw`\uFF08`;
+	var CLOSE_PAREN = String.raw`\uFF09`;
+	var annotated = `((?:${`[${FULL_WIDTH_ALNUM}]*[${ANNOTATABLE}]*[${HIRAGANA}]*`}?)|(?:${`[${FULL_WIDTH_DIGITS}]+(?:${FULL_WIDTH_COMMA}[${FULL_WIDTH_DIGITS}]+)+`})|(?:[${SYMBOLS}]))`;
+	var FURIGANA_PAIR = new RegExp(`${annotated}${OPEN_PAREN}([${JAPANESE}]*)${CLOSE_PAREN}`, "g");
+	var NON_JAPANESE = new RegExp(`[^${JAPANESE}]`);
+	var STARTS_ANNOTATABLE = new RegExp(`^[${ANNOTATABLE}]`);
+	var ALL_FULL_WIDTH = new RegExp(`^[${FULL_WIDTH_ALNUM}${SYMBOLS}${FULL_WIDTH_COMMA}]+$`);
+	function furiganaToRuby(text) {
+		return text.replace(FURIGANA_PAIR, (pair, base, reading) => canAnnotate(base, reading) ? toRuby(base, reading) : pair);
+	}
+	function canAnnotate(base, reading) {
+		if (base === "" || reading === "" || NON_JAPANESE.test(reading)) return false;
+		return STARTS_ANNOTATABLE.test(base) || ALL_FULL_WIDTH.test(base);
+	}
+	function toRuby(base, reading) {
+		return `<ruby>${base}<rp>(</rp><rt>${reading}</rt><rp>)</rp></ruby>`;
+	}
+	var BLANK = "____";
+	function studyQuestionToHtml(sentence) {
+		return furiganaToRuby(withAnswerFilledIn(sentence));
+	}
+	function withAnswerFilledIn(sentence) {
+		const answer = answerOf(sentence);
+		if (!answer || !sentence.content.includes(BLANK)) return sentence.content;
+		return sentence.content.replaceAll(BLANK, `<span class="text-primary-accent">${answer}</span>`);
+	}
+	function questionSentenceParts(sentence) {
+		const prompt = sentence.word_prompt ? `(${sentence.word_prompt})` : "";
+		return `${sentence.content}${prompt}`.split(BLANK).map(furiganaToRuby);
+	}
+	function sentenceAnswerHtml(sentence) {
+		return furiganaToRuby(answerOf(sentence) ?? "");
+	}
+	function answerOf(sentence) {
+		return sentence.kanji_answer || sentence.answer;
+	}
+	var SHARED_CARD_CLASS = "not-prose relative my-0 block overflow-hidden rounded-normal border align-top sm:flex sm:items-center sm:justify-between bg-tertiary-bg/50 border-rim";
+	var EXAMPLES_CARD = {
+		cardClass: `${SHARED_CARD_CLASS} sm:gap-4 px-16 pt-12 pb-16 sm:px-24 sm:pt-16 sm:pb-24`,
+		japaneseClass: "bp-ddw text-large md:text-subtitle prose w-full",
+		englishClass: "bp-sdw text-body prose w-full",
+		audioFontSize: "2.25rem"
+	};
+	var QUIZ_CARD = {
+		cardClass: `${SHARED_CARD_CLASS} gap-8 px-12 py-8 sm:p-16 sm:gap-12 sm:pt-12`,
+		japaneseClass: "bp-ddw text-body sm:text-large prose w-full",
+		englishClass: "bp-sdw text-extra-small sm:text-body prose w-full",
+		audioFontSize: "1.625rem"
+	};
+	var TEXT_COLUMN_CLASS = "relative z-1 flex grow flex-col items-center justify-center gap-4 text-center";
+	var PLAY_CIRCLE_PATH = "M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2m-2 13.5v-7a.5.5 0 0 1 .8-.4l4.67 3.5c.27.2.27.6 0 .8l-4.67 3.5a.5.5 0 0 1-.8-.4";
+	function buildSentenceCard(sentence, preset) {
+		const japanese = element("p", {
+			class: preset.japaneseClass,
+			"data-force-furigana": "default"
+		});
+		japanese.innerHTML = studyQuestionToHtml(sentence);
+		const english = element("p", { class: preset.englishClass });
+		english.innerHTML = sentence.translation ?? "";
+		const textColumn = element("div", { class: TEXT_COLUMN_CLASS }, [japanese, english]);
+		const audioUrl = sentence.female_audio_url ?? sentence.male_audio_url;
+		const children = audioUrl ? [buildAudioButton(audioUrl, preset.audioFontSize), textColumn] : [textColumn];
+		return element("aside", {
+			class: preset.cardClass,
+			"data-bb-study-question": String(sentence.id)
+		}, children);
+	}
+	function buildAudioButton(audioUrl, fontSize) {
+		const icon = svgIcon("h-24 w-24", `<path d="${PLAY_CIRCLE_PATH}" fill="currentColor"/>`);
+		const button = element("button", {
+			class: "block transition-opacity text-primary-accent",
+			title: "Play audio"
+		}, [element("div", {
+			class: "bp-hover-bg__child rounded-normal",
+			style: `font-size: ${fontSize};`
+		}, [element("div", {
+			class: "relative flex items-center justify-center",
+			style: "width: 1em; height: 1em;"
+		}, [icon])])]);
+		button.addEventListener("click", () => void new Audio(audioUrl).play().catch(() => void 0));
+		return element("ul", { class: "relative z-1 hidden sm:flex sm:items-center sm:gap-4" }, [element("li", {}, [button])]);
+	}
+	var OURS = "data-bb-ours";
+	var HIDDEN_BY_US = "data-bb-hidden";
+	function markAsOurs(node) {
+		node.setAttribute(OURS, "");
+		return node;
+	}
+	function paintStandIns(standIns) {
+		for (const standIn of standIns) {
+			const original = standIn.hides?.() ?? null;
+			if (original) hide(original);
+			if (standIn.ours.isConnected) continue;
+			if (original) original.after(standIn.ours);
+			else standIn.appendTo?.()?.append(standIn.ours);
+		}
+	}
+	function removeStandIns() {
+		for (const ours of document.querySelectorAll(`[${OURS}]`)) ours.remove();
+		for (const hidden of document.querySelectorAll(`[${HIDDEN_BY_US}]`)) {
+			hidden.style.removeProperty("display");
+			hidden.removeAttribute(HIDDEN_BY_US);
+		}
+	}
+	function hide(node) {
+		if (node.style.display !== "none") {
+			node.style.display = "none";
+			node.setAttribute(HIDDEN_BY_US, "");
+		}
+	}
+	function buildClozeStandIns(sentence) {
+		const originalSentence = findClozeSentence();
+		if (!originalSentence) return [];
+		const standIns = [{
+			ours: markAsOurs(buildSentence(originalSentence, sentence)),
+			hides: findClozeSentence
+		}];
+		const originalTense = findClozeTense();
+		if (originalTense) standIns.push({
+			ours: markAsOurs(refilled(originalTense, sentence.tense ?? "")),
+			hides: findClozeTense
+		});
+		const originalTranslation = findQuestionTranslation();
+		if (originalTranslation) standIns.push({
+			ours: markAsOurs(refilled(originalTranslation, sentence.translation ?? "")),
+			hides: findQuestionTranslation
+		});
+		return standIns;
+	}
+	function buildSentence(original, sentence) {
+		const line = shallowClone(original);
+		const parts = questionSentenceParts(sentence);
+		parts.forEach((part, index) => {
+			line.append(refilled(partTemplate(original), part));
+			if (index < parts.length - 1) line.append(buildBlank(original, sentence));
+		});
+		return line;
+	}
+	function buildBlank(original, sentence) {
+		const answer = sentenceAnswerHtml(sentence);
+		const template = original.querySelector(":scope > button");
+		if (!template) return refilled(partTemplate(original), answer);
+		const blank = element("span", { class: template.className });
+		const inner = template.querySelector("span");
+		if (inner) blank.append(refilled(inner, answer));
+		else blank.innerHTML = answer;
+		return blank;
+	}
+	function partTemplate(original) {
+		return original.querySelector(":scope > span") ?? element("span", {
+			class: "bp-ddw wrap-anywhere",
+			"data-force-furigana": "default"
+		});
+	}
+	function refilled(template, html) {
+		const clone = shallowClone(template);
+		clone.innerHTML = html;
+		return clone;
+	}
+	function shallowClone(node) {
+		const clone = node.cloneNode(false);
+		clone.style.removeProperty("display");
+		return clone;
+	}
+	var SLOT_CLASS = "bb-sentence-slot mx-auto w-fit animate-fade-in";
+	var mounted = null;
+	var repaintObserver = null;
+	function shownSentence() {
+		return mounted;
+	}
+	function showSentence(shown) {
+		const sentence = shown.sentences[shown.index];
+		if (!sentence) return;
+		clearSentence();
+		const standIns = buildStandIns(sentence);
+		if (standIns.length === 0) return;
+		mounted = {
+			...shown,
+			standIns
+		};
+		paintStandIns(standIns);
+		repaintWhenBunproRerenders();
+	}
+	function clearSentence() {
+		repaintObserver?.disconnect();
+		repaintObserver = null;
+		mounted = null;
+		removeStandIns();
+	}
+	function dropSentenceUnless(reviewKey) {
+		if (mounted && mounted.reviewKey !== reviewKey) clearSentence();
+	}
+	function buildStandIns(sentence) {
+		if (findNativeSentenceCard()) return [{
+			ours: markAsOurs(buildSentenceCard(sentence, QUIZ_CARD)),
+			hides: findNativeSentenceCard
+		}];
+		if (findClozeSentence()) return buildClozeStandIns(sentence);
+		return [{
+			ours: markAsOurs(element("div", { class: SLOT_CLASS }, [buildSentenceCard(sentence, EXAMPLES_CARD)])),
+			appendTo: findQuestionSection
+		}];
+	}
+	function repaintWhenBunproRerenders() {
+		const article = findQuizArticle();
+		if (!article) return;
+		repaintObserver = new MutationObserver(() => {
+			if (mounted) paintStandIns(mounted.standIns);
+		});
+		repaintObserver.observe(article, {
+			childList: true,
+			subtree: true
+		});
 	}
 	var STYLE_ID = "bb-styles";
 	var CSS = `
@@ -272,95 +553,6 @@
 		style.textContent = CSS;
 		document.head.append(style);
 	}
-	var KANJI = `${String.raw`\u2E80-\u2E99\u2E9B-\u2EF3\u2F00-\u2FD5`}${String.raw`\u3005\u3007\u3021-\u3029\u3038-\u303B`}${String.raw`\u3400-\u4DBF\u4E00-\u9FFF`}${String.raw`\uF900-\uFA6D\uFA70-\uFAD9`}`;
-	var HIRAGANA = String.raw`\u3041-\u3096\u309D-\u309F`;
-	var JAPANESE = `${KANJI}${HIRAGANA}${String.raw`\u30A0-\u30FF\u30FC`}`;
-	var ANNOTATABLE = `${KANJI}\\u30F6`;
-	var FULL_WIDTH_DIGITS = String.raw`\uFF10-\uFF19`;
-	var FULL_WIDTH_ALNUM = String.raw`\uFF21-\uFF3A\uFF41-\uFF5A${FULL_WIDTH_DIGITS}`;
-	var FULL_WIDTH_COMMA = String.raw`\uFF0C`;
-	var SYMBOLS = String.raw`\uFF0E\uFF1A\u30FC\u301C\uFF05\uFF06\uFF20\u21D2\u2103\uFF0B\u03B2`;
-	var OPEN_PAREN = String.raw`\uFF08`;
-	var CLOSE_PAREN = String.raw`\uFF09`;
-	var annotated = `((?:${`[${FULL_WIDTH_ALNUM}]*[${ANNOTATABLE}]*[${HIRAGANA}]*`}?)|(?:${`[${FULL_WIDTH_DIGITS}]+(?:${FULL_WIDTH_COMMA}[${FULL_WIDTH_DIGITS}]+)+`})|(?:[${SYMBOLS}]))`;
-	var FURIGANA_PAIR = new RegExp(`${annotated}${OPEN_PAREN}([${JAPANESE}]*)${CLOSE_PAREN}`, "g");
-	var NON_JAPANESE = new RegExp(`[^${JAPANESE}]`);
-	var STARTS_ANNOTATABLE = new RegExp(`^[${ANNOTATABLE}]`);
-	var ALL_FULL_WIDTH = new RegExp(`^[${FULL_WIDTH_ALNUM}${SYMBOLS}${FULL_WIDTH_COMMA}]+$`);
-	function furiganaToRuby(text) {
-		return text.replace(FURIGANA_PAIR, (pair, base, reading) => canAnnotate(base, reading) ? toRuby(base, reading) : pair);
-	}
-	function canAnnotate(base, reading) {
-		if (base === "" || reading === "" || NON_JAPANESE.test(reading)) return false;
-		return STARTS_ANNOTATABLE.test(base) || ALL_FULL_WIDTH.test(base);
-	}
-	function toRuby(base, reading) {
-		return `<ruby>${base}<rp>(</rp><rt>${reading}</rt><rp>)</rp></ruby>`;
-	}
-	var BLANK = "____";
-	function studyQuestionToHtml(sentence) {
-		return furiganaToRuby(withAnswerFilledIn(sentence));
-	}
-	function withAnswerFilledIn(sentence) {
-		const answer = sentence.kanji_answer || sentence.answer;
-		if (!answer || !sentence.content.includes(BLANK)) return sentence.content;
-		return sentence.content.replaceAll(BLANK, `<span class="text-primary-accent">${answer}</span>`);
-	}
-	var SVG_NAMESPACE = "http://www.w3.org/2000/svg";
-	function element(tag, attributes = {}, children = []) {
-		const node = document.createElement(tag);
-		for (const [name, value] of Object.entries(attributes)) node.setAttribute(name, value);
-		node.append(...children);
-		return node;
-	}
-	function svgIcon(className, shapes) {
-		const node = document.createElementNS(SVG_NAMESPACE, "svg");
-		node.setAttribute("viewBox", "0 0 24 24");
-		node.setAttribute("class", className);
-		node.setAttribute("aria-hidden", "true");
-		node.innerHTML = shapes;
-		return node;
-	}
-	var SLOT_CLASS = "bb-sentence-slot mx-auto w-fit animate-fade-in";
-	var CARD_CLASS$1 = "not-prose relative my-0 block overflow-hidden rounded-normal border align-top sm:flex sm:items-center sm:justify-between sm:gap-4 px-16 pt-12 pb-16 sm:px-24 sm:pt-16 sm:pb-24 bg-tertiary-bg/50 border-rim";
-	var TEXT_COLUMN_CLASS = "relative z-1 flex grow flex-col items-center justify-center gap-4 text-center";
-	var JAPANESE_CLASS = "bp-ddw text-large md:text-subtitle prose w-full";
-	var ENGLISH_CLASS = "bp-sdw text-body prose w-full";
-	var PLAY_CIRCLE_PATH = "M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2m-2 13.5v-7a.5.5 0 0 1 .8-.4l4.67 3.5c.27.2.27.6 0 .8l-4.67 3.5a.5.5 0 0 1-.8-.4";
-	var CARD_MARKER = "data-bb-sentence-card";
-	function buildSentenceCard(sentence) {
-		const japanese = element("p", {
-			class: JAPANESE_CLASS,
-			"data-force-furigana": "default"
-		});
-		japanese.innerHTML = studyQuestionToHtml(sentence);
-		const english = element("p", { class: ENGLISH_CLASS });
-		english.innerHTML = sentence.translation ?? "";
-		const textColumn = element("div", { class: TEXT_COLUMN_CLASS }, [japanese, english]);
-		const audioUrl = sentence.female_audio_url ?? sentence.male_audio_url;
-		const card = element("aside", {
-			class: CARD_CLASS$1,
-			"data-bb-study-question": String(sentence.id)
-		}, audioUrl ? [buildAudioButton(audioUrl), textColumn] : [textColumn]);
-		return element("div", {
-			class: SLOT_CLASS,
-			[CARD_MARKER]: ""
-		}, [card]);
-	}
-	function buildAudioButton(audioUrl) {
-		const button = element("button", {
-			class: "block transition-opacity text-primary-accent",
-			title: "Play audio"
-		}, [element("div", {
-			class: "bp-hover-bg__child rounded-normal",
-			style: "font-size: 2.25rem;"
-		}, [element("div", {
-			class: "relative flex items-center justify-center",
-			style: "width: 1em; height: 1em;"
-		}, [svgIcon("h-24 w-24", `<path d="${PLAY_CIRCLE_PATH}" fill="currentColor"/>`)])])]);
-		button.addEventListener("click", () => void new Audio(audioUrl).play().catch(() => void 0));
-		return element("ul", { class: "relative z-1 hidden sm:flex sm:items-center sm:gap-4" }, [element("li", {}, [button])]);
-	}
 	var ROTATION_KEY = "exampleSentence.rotation";
 	function pickSentenceIndex(termKey, sessionId, count) {
 		const table = readStored(ROTATION_KEY, {});
@@ -389,10 +581,7 @@
 		if (!term || !state.isRevealing || !state.isCorrect || hasNativeSentence) return null;
 		return term;
 	}
-	var stopWatchingQuiz = null;
-	var sectionObserver = null;
-	var mountedFor = null;
-	var hasWarned = false;
+	var stopWatchingQuiz$1 = null;
 	var exampleSentenceFeature = {
 		id: "example-sentence",
 		title: "Show unverified example sentences for A1+ vocab",
@@ -400,81 +589,79 @@
 		enabledByDefault: true,
 		start() {
 			injectStyles();
-			stopWatchingQuiz = watchQuizState(onQuizStateChange);
+			stopWatchingQuiz$1 = watchQuizState(onQuizStateChange$1);
 		},
 		stop() {
-			stopWatchingQuiz?.();
-			stopWatchingQuiz = null;
-			unmountCard();
+			stopWatchingQuiz$1?.();
+			stopWatchingQuiz$1 = null;
+			clearSentence();
 		}
 	};
-	function onQuizStateChange(state) {
+	function onQuizStateChange$1(state) {
+		dropSentenceUnless(solvedReviewKey(state));
 		const upcoming = termToPrefetch(state);
 		if (upcoming) loadSentences(upcoming);
 		const term = termToShow(state, hasNativeSentenceCard());
-		if (!term || !state.sessionId) {
-			unmountCard();
-			return;
-		}
-		const mountKey = mountKeyFor(term, state.sessionId);
-		if (mountedFor === mountKey) return;
-		unmountCard();
-		mountSentenceFor(term, state.sessionId);
+		const reviewKey = solvedReviewKey(state);
+		if (!term || !reviewKey || !state.sessionId || shownSentence()?.reviewKey === reviewKey) return;
+		showRotatedSentence(term, reviewKey, state.sessionId);
 	}
-	async function mountSentenceFor(term, sessionId) {
-		const mountKey = mountKeyFor(term, sessionId);
+	async function showRotatedSentence(term, reviewKey, sessionId) {
 		const sentences = await loadSentences(term);
-		if (sentences.length === 0 || currentMountKey() !== mountKey) return;
-		const sentence = sentences[pickSentenceIndex(termKey(term), sessionId, sentences.length)];
-		if (sentence) mountCard(mountKey, sentence);
-	}
-	async function loadSentences(term) {
-		try {
-			return await fetchStudyQuestions(term);
-		} catch (error) {
-			if (!hasWarned) {
-				hasWarned = true;
-				console.warn("[Better Bunpro] Could not load example sentences:", error);
-			}
-			return [];
-		}
-	}
-	function mountCard(mountKey, sentence) {
-		const section = findQuestionSection();
-		if (!section) return;
-		section.append(buildSentenceCard(sentence));
-		mountedFor = mountKey;
-		remountIfReactReplacesSection(section, mountKey, sentence);
-	}
-	function remountIfReactReplacesSection(section, mountKey, sentence) {
-		sectionObserver?.disconnect();
-		sectionObserver = new MutationObserver(() => {
-			if (mountedFor !== mountKey || section.querySelector(`[data-bb-sentence-card]`)) return;
-			section.append(buildSentenceCard(sentence));
+		if (sentences.length === 0) return;
+		if (solvedReviewKey(readQuizState()) !== reviewKey || shownSentence()?.reviewKey === reviewKey) return;
+		showSentence({
+			reviewKey,
+			sentences,
+			index: pickSentenceIndex(termKey(term), sessionId, sentences.length)
 		});
-		sectionObserver.observe(section, { childList: true });
 	}
-	function unmountCard() {
-		sectionObserver?.disconnect();
-		sectionObserver = null;
-		mountedFor = null;
-		for (const card of document.querySelectorAll(`[${CARD_MARKER}]`)) card.remove();
+	function bunproSentenceIndex(sentences) {
+		const shownId = nativeSentenceId();
+		if (shownId !== null) {
+			const found = sentences.findIndex((sentence) => sentence.id === shownId);
+			if (found !== -1) return found;
+		}
+		const rendered = findClozeSentence()?.textContent;
+		if (rendered) {
+			const found = indexOfRenderedSentence(rendered, sentences.map(partsTextOf));
+			if (found !== -1) return found;
+		}
+		return 0;
 	}
-	function currentMountKey() {
-		const state = readQuizState();
-		const term = termToShow(state, hasNativeSentenceCard());
-		return term && state.sessionId ? mountKeyFor(term, state.sessionId) : null;
+	function indexOfRenderedSentence(rendered, candidates) {
+		const shown = withoutSpaces(rendered);
+		return candidates.findIndex((parts) => {
+			const pieces = parts.map(withoutSpaces).filter((piece) => piece !== "");
+			return pieces.length > 0 && appearInOrder(shown, pieces);
+		});
 	}
-	function mountKeyFor(term, sessionId) {
-		return `${termKey(term)}@${sessionId}`;
+	function appearInOrder(shown, pieces) {
+		let searchFrom = 0;
+		for (const piece of pieces) {
+			const at = shown.indexOf(piece, searchFrom);
+			if (at === -1) return false;
+			searchFrom = at + piece.length;
+		}
+		return true;
 	}
-	function termKey(term) {
-		return `${term.type}:${term.id}`;
+	function withoutSpaces(text) {
+		return text.replace(/\s+/g, "");
+	}
+	function partsTextOf(sentence) {
+		const holder = document.createElement("div");
+		return questionSentenceParts(sentence).map((part) => {
+			holder.innerHTML = part;
+			return holder.textContent ?? "";
+		});
 	}
 	var PANEL_ID = "bb-settings-panel";
 	var CARD_CLASS = "bb-panel-card relative z-1 flex flex-col overflow-hidden rounded-normal border border-rim bg-secondary-bg text-primary-fg shadow-normal";
 	var CLOSE_SHAPES = "<path d=\"M6 6 18 18M18 6 6 18\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\"/>";
 	var CARET_SHAPES = "<path d=\"M9.29 6.71a1 1 0 0 0 0 1.41L13.17 12l-3.88 3.88a1 1 0 1 0 1.41 1.41l4.59-4.59a1 1 0 0 0 0-1.41L10.7 6.7a1 1 0 0 0-1.41.01\" fill=\"currentColor\"/>";
+	function isSettingsPanelOpen() {
+		return document.getElementById(PANEL_ID) !== null;
+	}
 	function toggleSettingsPanel() {
 		const open = document.getElementById(PANEL_ID);
 		if (open) {
@@ -548,6 +735,57 @@
 		paint();
 		return button;
 	}
+	function nextSentenceIndex(shownIndex, count) {
+		return count === 0 ? 0 : (shownIndex + 1) % count;
+	}
+	var CYCLE_KEY = "Tab";
+	var stopWatchingQuiz = null;
+	var sentenceCycleFeature = {
+		id: "sentence-cycle",
+		title: "Cycle example sentences with Tab",
+		description: "Once you have answered a review correctly, press Tab to see the same item in another one of its example sentences, and again to keep cycling through them. On a cloze review the question sentence itself is swapped; elsewhere the sentence card is. Your answer still belongs to the sentence you were actually quizzed on, and the sentence your next review session starts on is unchanged.",
+		enabledByDefault: true,
+		start() {
+			injectStyles();
+			stopWatchingQuiz = watchQuizState(onQuizStateChange);
+			window.addEventListener("keydown", onKeyDown, true);
+		},
+		stop() {
+			window.removeEventListener("keydown", onKeyDown, true);
+			stopWatchingQuiz?.();
+			stopWatchingQuiz = null;
+			clearSentence();
+		}
+	};
+	function onQuizStateChange(state) {
+		dropSentenceUnless(solvedReviewKey(state));
+		if (state.reviewable && state.sessionId) loadSentences(state.reviewable);
+	}
+	function onKeyDown(event) {
+		if (event.key !== CYCLE_KEY || hasModifier(event) || isSettingsPanelOpen()) return;
+		const state = readQuizState();
+		const reviewKey = solvedReviewKey(state);
+		if (!reviewKey || !state.reviewable || !hasSentenceToCycle(reviewKey)) return;
+		event.preventDefault();
+		event.stopPropagation();
+		cycleSentence(reviewKey, state.reviewable);
+	}
+	function hasModifier(event) {
+		return event.altKey || event.ctrlKey || event.metaKey || event.shiftKey;
+	}
+	function hasSentenceToCycle(reviewKey) {
+		return shownSentence()?.reviewKey === reviewKey || findNativeSentenceCard() !== null || findClozeSentence() !== null;
+	}
+	async function cycleSentence(reviewKey, term) {
+		const sentences = await loadSentences(term);
+		if (sentences.length < 2 || solvedReviewKey(readQuizState()) !== reviewKey) return;
+		const shown = shownSentence();
+		showSentence({
+			reviewKey,
+			sentences,
+			index: nextSentenceIndex(shown?.reviewKey === reviewKey ? shown.index : bunproSentenceIndex(sentences), sentences.length)
+		});
+	}
 	var LAUNCHER_MARKER = "data-bb-launcher";
 	var TUNE_SHAPES = `<g fill="currentColor">
   <rect x="3" y="6" width="18" height="2" rx="1"/>
@@ -589,6 +827,7 @@
 		return element("li", { [LAUNCHER_MARKER]: "" }, [button]);
 	}
 	registerFeature(exampleSentenceFeature);
+	registerFeature(sentenceCycleFeature);
 	mountSettingsLaunchers();
 	startEnabledFeatures();
 })();

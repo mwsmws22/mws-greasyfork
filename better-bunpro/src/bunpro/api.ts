@@ -14,6 +14,10 @@ export interface StudyQuestion {
   answer: string | null;
   kanji_answer: string | null;
   translation: string | null;
+  /** Shown after the sentence as the dictionary form to conjugate, e.g. `(寝る)`. */
+  word_prompt: string | null;
+  /** Shown above the sentence in a cloze question, e.g. `Past`. */
+  tense: string | null;
   sentence_order: number | null;
   male_audio_url: string | null;
   female_audio_url: string | null;

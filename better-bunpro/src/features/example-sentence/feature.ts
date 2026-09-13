@@ -1,22 +1,24 @@
-import { fetchStudyQuestions, type StudyQuestion } from '../../bunpro/api';
-import { findQuestionSection, hasNativeSentenceCard } from '../../bunpro/quiz-dom';
+import { hasNativeSentenceCard } from '../../bunpro/quiz-dom';
 import {
   readQuizState,
   watchQuizState,
   type QuizState,
   type ReviewableRef,
 } from '../../bunpro/quiz-state';
+import { loadSentences } from '../../quiz-sentence/load';
+import { solvedReviewKey, termKey } from '../../quiz-sentence/review';
+import {
+  clearSentence,
+  dropSentenceUnless,
+  showSentence,
+  shownSentence,
+} from '../../quiz-sentence/slot';
 import { injectStyles } from '../../styles';
 import type { Feature } from '../registry';
-import { buildSentenceCard, CARD_MARKER } from './card';
 import { pickSentenceIndex } from './rotation';
 import { termToPrefetch, termToShow } from './timing';
 
 let stopWatchingQuiz: (() => void) | null = null;
-let sectionObserver: MutationObserver | null = null;
-/** Which term and session the mounted card belongs to, so we neither duplicate nor stale it. */
-let mountedFor: string | null = null;
-let hasWarned = false;
 
 export const exampleSentenceFeature: Feature = {
   id: 'example-sentence',
@@ -38,101 +40,41 @@ export const exampleSentenceFeature: Feature = {
   stop() {
     stopWatchingQuiz?.();
     stopWatchingQuiz = null;
-    unmountCard();
+    clearSentence();
   },
 };
 
 function onQuizStateChange(state: QuizState): void {
+  dropSentenceUnless(solvedReviewKey(state));
+
   const upcoming = termToPrefetch(state);
   if (upcoming) {
     void loadSentences(upcoming);
   }
 
   const term = termToShow(state, hasNativeSentenceCard());
-  if (!term || !state.sessionId) {
-    unmountCard();
+  const reviewKey = solvedReviewKey(state);
+  if (!term || !reviewKey || !state.sessionId || shownSentence()?.reviewKey === reviewKey) {
     return;
   }
-
-  const mountKey = mountKeyFor(term, state.sessionId);
-  if (mountedFor === mountKey) {
-    return;
-  }
-  unmountCard();
-  void mountSentenceFor(term, state.sessionId);
+  void showRotatedSentence(term, reviewKey, state.sessionId);
 }
 
-async function mountSentenceFor(term: ReviewableRef, sessionId: string): Promise<void> {
-  const mountKey = mountKeyFor(term, sessionId);
+async function showRotatedSentence(
+  term: ReviewableRef,
+  reviewKey: string,
+  sessionId: string,
+): Promise<void> {
   const sentences = await loadSentences(term);
-  if (sentences.length === 0 || currentMountKey() !== mountKey) {
+  if (sentences.length === 0) {
+    return;
+  }
+
+  /** The question may have moved on, or Tab may have chosen a sentence, while we fetched. */
+  if (solvedReviewKey(readQuizState()) !== reviewKey || shownSentence()?.reviewKey === reviewKey) {
     return;
   }
 
   const index = pickSentenceIndex(termKey(term), sessionId, sentences.length);
-  const sentence = sentences[index];
-  if (sentence) {
-    mountCard(mountKey, sentence);
-  }
-}
-
-async function loadSentences(term: ReviewableRef): Promise<StudyQuestion[]> {
-  try {
-    return await fetchStudyQuestions(term);
-  } catch (error) {
-    if (!hasWarned) {
-      hasWarned = true;
-      console.warn('[Better Bunpro] Could not load example sentences:', error);
-    }
-    return [];
-  }
-}
-
-function mountCard(mountKey: string, sentence: StudyQuestion): void {
-  const section = findQuestionSection();
-  if (!section) {
-    return;
-  }
-  section.append(buildSentenceCard(sentence));
-  mountedFor = mountKey;
-  remountIfReactReplacesSection(section, mountKey, sentence);
-}
-
-/** Bunpro re-renders the question section as it reveals, which can drop our card. */
-function remountIfReactReplacesSection(
-  section: HTMLElement,
-  mountKey: string,
-  sentence: StudyQuestion,
-): void {
-  sectionObserver?.disconnect();
-  sectionObserver = new MutationObserver(() => {
-    if (mountedFor !== mountKey || section.querySelector(`[${CARD_MARKER}]`)) {
-      return;
-    }
-    section.append(buildSentenceCard(sentence));
-  });
-  sectionObserver.observe(section, { childList: true });
-}
-
-function unmountCard(): void {
-  sectionObserver?.disconnect();
-  sectionObserver = null;
-  mountedFor = null;
-  for (const card of document.querySelectorAll(`[${CARD_MARKER}]`)) {
-    card.remove();
-  }
-}
-
-function currentMountKey(): string | null {
-  const state = readQuizState();
-  const term = termToShow(state, hasNativeSentenceCard());
-  return term && state.sessionId ? mountKeyFor(term, state.sessionId) : null;
-}
-
-function mountKeyFor(term: ReviewableRef, sessionId: string): string {
-  return `${termKey(term)}@${sessionId}`;
-}
-
-function termKey(term: ReviewableRef): string {
-  return `${term.type}:${term.id}`;
+  showSentence({ reviewKey, sentences, index });
 }

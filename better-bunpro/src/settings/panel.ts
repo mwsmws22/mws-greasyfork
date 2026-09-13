@@ -12,6 +12,10 @@ const CLOSE_SHAPES =
 const CARET_SHAPES =
   '<path d="M9.29 6.71a1 1 0 0 0 0 1.41L13.17 12l-3.88 3.88a1 1 0 1 0 1.41 1.41l4.59-4.59a1 1 0 0 0 0-1.41L10.7 6.7a1 1 0 0 0-1.41.01" fill="currentColor"/>';
 
+export function isSettingsPanelOpen(): boolean {
+  return document.getElementById(PANEL_ID) !== null;
+}
+
 export function toggleSettingsPanel(): void {
   const open = document.getElementById(PANEL_ID);
   if (open) {
