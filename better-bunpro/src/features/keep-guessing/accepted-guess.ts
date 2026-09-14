@@ -1,7 +1,7 @@
 /**
- * After a synonym is added, the next Enter should submit as a pass. Keep
- * guessing would otherwise swallow that same text again, so we remember it
- * here and hand back the official answer Bunpro will actually accept.
+ * After a synonym is added, the next Enter should submit as a pass. This
+ * session's answer list will not include the new synonym, so we hand back an
+ * official answer Bunpro already accepts and submit that instead.
  */
 let accepted: { reviewKey: string; guess: string; official: string } | null = null;
 
@@ -13,7 +13,18 @@ export function takeAcceptedOfficial(reviewKey: string, guess: string): string |
   if (accepted === null || accepted.reviewKey !== reviewKey || !isRememberedGuess(accepted.guess, guess)) {
     return null;
   }
-  const official = accepted.official;
+  return takeOfficial();
+}
+
+export function takeAcceptedOfficialForReview(reviewKey: string): string | null {
+  if (accepted === null || accepted.reviewKey !== reviewKey) {
+    return null;
+  }
+  return takeOfficial();
+}
+
+function takeOfficial(): string {
+  const official = accepted?.official ?? '';
   accepted = null;
   return official;
 }

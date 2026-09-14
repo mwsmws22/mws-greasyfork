@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { rememberAcceptedGuess, takeAcceptedOfficial } from './accepted-guess';
+import { rememberAcceptedGuess, takeAcceptedOfficial, takeAcceptedOfficialForReview } from './accepted-guess';
 
 describe('accepted guess after adding a synonym', () => {
   it('hands back the official answer once, then forgets it', () => {
@@ -21,5 +21,12 @@ describe('accepted guess after adding a synonym', () => {
     rememberAcceptedGuess('vocab:1@s', 'gunun', 'to have guts');
 
     expect(takeAcceptedOfficial('vocab:1@s', 'gunu')).toBe('to have guts');
+  });
+
+  it('hands back the official answer for a review without checking the field', () => {
+    rememberAcceptedGuess('vocab:1@s', 'gunun', 'to have guts');
+
+    expect(takeAcceptedOfficialForReview('vocab:1@s')).toBe('to have guts');
+    expect(takeAcceptedOfficialForReview('vocab:1@s')).toBeNull();
   });
 });
