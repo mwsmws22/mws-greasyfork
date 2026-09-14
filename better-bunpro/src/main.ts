@@ -5,6 +5,7 @@ import { humanTermAudioFeature } from './features/human-term-audio/feature';
 import { keepGuessingFeature } from './features/keep-guessing/feature';
 import { sentenceCycleFeature } from './features/sentence-cycle/feature';
 import { mountSettingsLaunchers } from './settings/launcher';
+import { mountHotkeyGuide } from './ui/hotkey-guide-mount';
 
 registerFeature(exampleSentenceFeature);
 registerFeature(sentenceCycleFeature);
@@ -13,4 +14,5 @@ registerFeature(humanTermAudioFeature);
 registerFeature(addSynonymFeature);
 
 mountSettingsLaunchers();
+mountHotkeyGuide();
 startEnabledFeatures();

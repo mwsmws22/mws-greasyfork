@@ -5,6 +5,7 @@ import { addUserSynonym } from '../../bunpro/synonyms';
 import { element } from '../../dom';
 import { injectStyles } from '../../styles';
 import { buildActionButton } from '../../ui/action-button';
+import { areKeystrokesClaimed, hasModifier } from '../../ui/keystrokes';
 import { rememberAcceptedGuess } from '../keep-guessing/accepted-guess';
 import { markGuessCorrect } from '../keep-guessing/feedback';
 import { submitAcceptedStandIn } from '../keep-guessing/feature';
@@ -12,6 +13,7 @@ import type { Feature } from '../registry';
 import { shouldOfferSynonym } from './offer';
 
 const SLOT_ID = 'bb-add-synonym';
+const SYNONYM_KEY = 's';
 const PLUS_SHAPES =
   '<path d="M12 5v14M5 12h14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>';
 
@@ -28,8 +30,8 @@ export const addSynonymFeature: Feature = {
     'After you miss a vocab translation, Bunpro hides "Your Synonyms" down in More Info. ' +
     'With this on, an Add as synonym button sits next to the wrong answer so you can accept ' +
     'what you typed without scrolling. Adding it saves the guess and immediately marks this ' +
-    'review correct. The guess is saved through the same request Bunpro\'s own synonym field ' +
-    'uses, and a guess it already accepts is not offered again.',
+    'review correct. Press S for the same action. The guess is saved through the same request ' +
+    'Bunpro\'s own synonym field uses, and a guess it already accepts is not offered again.',
   enabledByDefault: true,
 
   start() {
@@ -37,9 +39,11 @@ export const addSynonymFeature: Feature = {
     stopWatchingQuiz = watchQuizState(syncButton);
     remountObserver = new MutationObserver(() => syncButton(readQuizState()));
     remountObserver.observe(document.body, { childList: true, subtree: true });
+    window.addEventListener('keydown', onKeyDown, true);
   },
 
   stop() {
+    window.removeEventListener('keydown', onKeyDown, true);
     stopWatchingQuiz?.();
     stopWatchingQuiz = null;
     remountObserver?.disconnect();
@@ -68,6 +72,25 @@ function syncButton(state: QuizState): void {
     return;
   }
   console.before(buildSlot(state));
+}
+
+/**
+ * Same capture-phase claim as Tab: S is only ours when the button is on screen,
+ * so typing an s into a translation still belongs to the quiz.
+ */
+function onKeyDown(event: KeyboardEvent): void {
+  if (event.key !== SYNONYM_KEY || event.repeat || hasModifier(event) || areKeystrokesClaimed()) {
+    return;
+  }
+  const button = document.querySelector<HTMLButtonElement>(`#${SLOT_ID} button`);
+  if (!button) {
+    return;
+  }
+  event.preventDefault();
+  event.stopPropagation();
+  if (!button.disabled) {
+    button.click();
+  }
 }
 
 function buildSlot(state: QuizState): HTMLElement {

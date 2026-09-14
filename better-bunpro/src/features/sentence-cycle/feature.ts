@@ -15,7 +15,7 @@ import {
   shownSentence,
 } from '../../quiz-sentence/slot';
 import { injectStyles } from '../../styles';
-import { areKeystrokesClaimed } from '../../ui/keystrokes';
+import { areKeystrokesClaimed, hasModifier } from '../../ui/keystrokes';
 import type { Feature } from '../registry';
 import { nextSentenceIndex } from './cycle';
 
@@ -82,10 +82,6 @@ function onKeyDown(event: KeyboardEvent): void {
   event.preventDefault();
   event.stopPropagation();
   void cycleSentence(reviewKey, state.reviewable);
-}
-
-function hasModifier(event: KeyboardEvent): boolean {
-  return event.altKey || event.ctrlKey || event.metaKey || event.shiftKey;
 }
 
 /** A sentence of ours, one of Bunpro's, or the cloze question that is a sentence itself. */

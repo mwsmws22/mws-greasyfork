@@ -30,6 +30,11 @@ export function areKeystrokesClaimed(): boolean {
   return claims.length > 0;
 }
 
+/** Quiz hotkeys ignore chords so Ctrl/Alt/Meta/Shift stay with the browser or Bunpro. */
+export function hasModifier(event: KeyboardEvent): boolean {
+  return event.altKey || event.ctrlKey || event.metaKey || event.shiftKey;
+}
+
 /**
  * Escape closes the newest thing we have open, wherever focus is. Every other
  * key is only ours when it was aimed at our own UI: typing anywhere else still

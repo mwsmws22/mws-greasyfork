@@ -2,7 +2,7 @@ import { fillAnswerInput, findAnswerInput, findSubmitButton } from '../../bunpro
 import { readQuizState, type QuizState } from '../../bunpro/quiz-state';
 import { reviewKey } from '../../bunpro/review';
 import { injectStyles } from '../../styles';
-import { areKeystrokesClaimed } from '../../ui/keystrokes';
+import { areKeystrokesClaimed, hasModifier } from '../../ui/keystrokes';
 import type { Feature } from '../registry';
 import { takeAcceptedOfficial, takeAcceptedOfficialForReview } from './accepted-guess';
 import { markGuessWrong } from './feedback';
@@ -151,8 +151,4 @@ function isWrongGuess(): boolean {
 /** Once a question has been answered, Enter moves on and is none of our business. */
 function isAwaitingTypedAnswer(state: QuizState): boolean {
   return state.inputMode === 'manual' && !state.isPostAttempt && !state.isRevealing;
-}
-
-function hasModifier(event: KeyboardEvent): boolean {
-  return event.altKey || event.ctrlKey || event.metaKey || event.shiftKey;
 }

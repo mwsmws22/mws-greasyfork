@@ -187,6 +187,13 @@ export function findQuizConsole(): HTMLElement | null {
   return document.querySelector<HTMLElement>(`${QUIZ_ARTICLE} .bp-quiz-console`);
 }
 
+/** The Hotkey Guide article Bunpro mounts in `#modal-portal`. */
+export function findHotkeyGuideArticle(): HTMLElement | null {
+  return document.querySelector<HTMLElement>(
+    '#modal-portal article.grid.gap-24.text-secondary-fg',
+  );
+}
+
 /** The row holding Bunpro's Exit / Quiz settings / Styling / Dictionary icons. */
 export function findQuizToolbar(): HTMLElement | null {
   const rows = document.querySelectorAll<HTMLElement>(`${QUIZ_ARTICLE} > header ul`);
