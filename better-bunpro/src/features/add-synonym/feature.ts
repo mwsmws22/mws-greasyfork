@@ -1,4 +1,4 @@
-import { fillAnswerInput, findQuizArticle, findQuizConsole, findUndoButton } from '../../bunpro/quiz-dom';
+import { findQuizArticle, findQuizConsole, findUndoButton, showAnswerInput } from '../../bunpro/quiz-dom';
 import { readQuizState, watchQuizState, type QuizState } from '../../bunpro/quiz-state';
 import { reviewKey } from '../../bunpro/review';
 import { addUserSynonym } from '../../bunpro/synonyms';
@@ -7,6 +7,7 @@ import { injectStyles } from '../../styles';
 import { buildActionButton } from '../../ui/action-button';
 import { rememberAcceptedGuess } from '../keep-guessing/accepted-guess';
 import { markGuessCorrect } from '../keep-guessing/feedback';
+import { submitAcceptedStandIn } from '../keep-guessing/feature';
 import type { Feature } from '../registry';
 import { shouldOfferSynonym } from './offer';
 
@@ -18,6 +19,7 @@ let stopWatchingQuiz: (() => void) | null = null;
 let remountObserver: MutationObserver | null = null;
 let addedFor: string | null = null;
 let addedGuess: string | null = null;
+let standInQueuedFor: string | null = null;
 
 export const addSynonymFeature: Feature = {
   id: 'add-synonym',
@@ -25,9 +27,9 @@ export const addSynonymFeature: Feature = {
   description:
     'After you miss a vocab translation, Bunpro hides "Your Synonyms" down in More Info. ' +
     'With this on, an Add as synonym button sits next to the wrong answer so you can accept ' +
-    'what you typed without scrolling. Adding it also marks this review correct: the field ' +
-    'turns green, and Enter submits a pass. The guess is saved through the same request ' +
-    "Bunpro's own synonym field uses, and a guess it already accepts is not offered again.",
+    'what you typed without scrolling. Adding it saves the guess and immediately marks this ' +
+    'review correct. The guess is saved through the same request Bunpro\'s own synonym field ' +
+    'uses, and a guess it already accepts is not offered again.',
   enabledByDefault: true,
 
   start() {
@@ -45,14 +47,14 @@ export const addSynonymFeature: Feature = {
     removeButton();
     addedFor = null;
     addedGuess = null;
+    standInQueuedFor = null;
   },
 };
 
 function syncButton(state: QuizState): void {
   const review = reviewKey(state);
   if (review !== null && addedFor === review) {
-    restoreGuess(state, addedGuess);
-    markGuessCorrect();
+    followThroughAcceptedGuess(state, review);
   }
   if (!shouldOfferSynonym(state) || !findQuizArticle()) {
     removeButton();
@@ -105,14 +107,35 @@ function acceptAsCorrect(state: QuizState, review: string | null, synonym: strin
   }
   if (state.isPostAttempt && !state.isCorrect) {
     findUndoButton()?.click();
+    return;
+  }
+  if (review !== null) {
+    queueStandIn(review);
   }
 }
 
-function restoreGuess(state: QuizState, guess: string | null): void {
-  if (guess === null || state.isPostAttempt || state.isRevealing) {
+function followThroughAcceptedGuess(state: QuizState, review: string): void {
+  if (!state.isPostAttempt && !state.isRevealing) {
+    queueStandIn(review);
     return;
   }
-  fillAnswerInput(guess);
+  showAddedGuess();
+}
+
+function queueStandIn(review: string): void {
+  if (standInQueuedFor === review) {
+    return;
+  }
+  standInQueuedFor = review;
+  submitAcceptedStandIn(review);
+}
+
+function showAddedGuess(): void {
+  if (addedGuess === null) {
+    return;
+  }
+  showAnswerInput(addedGuess);
+  markGuessCorrect();
 }
 
 function removeButton(): void {

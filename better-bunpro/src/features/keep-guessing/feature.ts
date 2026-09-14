@@ -4,7 +4,7 @@ import { reviewKey } from '../../bunpro/review';
 import { injectStyles } from '../../styles';
 import { areKeystrokesClaimed } from '../../ui/keystrokes';
 import type { Feature } from '../registry';
-import { takeAcceptedOfficial } from './accepted-guess';
+import { takeAcceptedOfficial, takeAcceptedOfficialForReview } from './accepted-guess';
 import { markGuessWrong } from './feedback';
 import { gradeAnswer } from './grading';
 
@@ -12,6 +12,7 @@ const SUBMIT_KEY = 'Enter';
 
 /** Submitting a rejected guess unchanged is how you give up and see the answer. */
 let lastRejected: { reviewKey: string; guess: string } | null = null;
+let officialSubmitTimer: ReturnType<typeof setTimeout> | null = null;
 
 export const keepGuessingFeature: Feature = {
   id: 'keep-guessing',
@@ -34,6 +35,10 @@ export const keepGuessingFeature: Feature = {
     window.removeEventListener('keydown', onKeyDown, true);
     window.removeEventListener('click', onClick, true);
     lastRejected = null;
+    if (officialSubmitTimer !== null) {
+      window.clearTimeout(officialSubmitTimer);
+      officialSubmitTimer = null;
+    }
   },
 };
 
@@ -58,12 +63,64 @@ function onClick(event: MouseEvent): void {
 }
 
 function swallowIfWrong(event: Event): void {
+  if (submitRememberedAsCorrect(event)) {
+    return;
+  }
   if (!isWrongGuess()) {
     return;
   }
   event.preventDefault();
   event.stopPropagation();
   markGuessWrong();
+}
+
+/**
+ * This session's answer list does not include the synonym we just saved, so
+ * submitting that text would still fail. Swap in an official answer after React
+ * has seen the input event, then press Bunpro's own submit.
+ */
+function submitRememberedAsCorrect(event: Event): boolean {
+  const input = findAnswerInput();
+  const state = readQuizState();
+  if (!input || !isAwaitingTypedAnswer(state)) {
+    return false;
+  }
+  const review = reviewKey(state);
+  if (!review) {
+    return false;
+  }
+  const official = takeAcceptedOfficial(review, input.value.trim());
+  if (official === null) {
+    return false;
+  }
+  lastRejected = null;
+  event.preventDefault();
+  event.stopPropagation();
+  queueOfficialSubmit(official);
+  return true;
+}
+
+/** Used when adding a synonym: no extra Enter, submit a known-good answer now. */
+export function submitAcceptedStandIn(reviewKey: string): boolean {
+  const official = takeAcceptedOfficialForReview(reviewKey);
+  if (official === null) {
+    return false;
+  }
+  lastRejected = null;
+  queueOfficialSubmit(official);
+  return true;
+}
+
+function queueOfficialSubmit(official: string): void {
+  fillAnswerInput(official);
+  if (officialSubmitTimer !== null) {
+    window.clearTimeout(officialSubmitTimer);
+  }
+  officialSubmitTimer = window.setTimeout(() => {
+    officialSubmitTimer = null;
+    fillAnswerInput(official);
+    findSubmitButton()?.click();
+  }, 0);
 }
 
 function isWrongGuess(): boolean {
@@ -79,14 +136,6 @@ function isWrongGuess(): boolean {
   }
 
   const guess = input.value.trim();
-  const official = takeAcceptedOfficial(review, guess);
-  if (official !== null) {
-    lastRejected = null;
-    if (official !== guess) {
-      fillAnswerInput(official);
-    }
-    return false;
-  }
   if (lastRejected?.reviewKey === review && lastRejected.guess === guess) {
     lastRejected = null;
     return false;

@@ -70,9 +70,28 @@ export function fillAnswerInput(value: string): void {
   if (!input || input.value === value) {
     return;
   }
+  writeAnswerInput(input, value);
+  input.dispatchEvent(new Event('input', { bubbles: true }));
+}
+
+/**
+ * After a graded answer React ignores input events, so this only paints the
+ * field and its placeholder. The next question remounts the input anyway.
+ */
+export function showAnswerInput(value: string): void {
+  const input = findAnswerInput();
+  if (!input) {
+    return;
+  }
+  input.placeholder = value;
+  if (input.value !== value) {
+    writeAnswerInput(input, value);
+  }
+}
+
+function writeAnswerInput(input: HTMLInputElement, value: string): void {
   const native = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')?.set;
   native?.call(input, value);
-  input.dispatchEvent(new Event('input', { bubbles: true }));
 }
 
 /** Submits the answer, then becomes the button that moves on to the next question. */
