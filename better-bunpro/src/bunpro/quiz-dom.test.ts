@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { findUndoConfirmButton, undoGradedAnswer } from './quiz-dom';
+import { findHotkeyGuideArticle, findUndoConfirmButton, undoGradedAnswer } from './quiz-dom';
 
 const HIDE_CLASS = 'bb-skipping-undo-modal';
 
@@ -58,6 +58,28 @@ describe('undoGradedAnswer', () => {
     undoGradedAnswer();
 
     expect(undone()).toBe(true);
+  });
+});
+
+describe('findHotkeyGuideArticle', () => {
+  it('finds Bunpro\'s Hotkey Guide article in the modal portal', () => {
+    document.body.innerHTML = `
+      <div id="modal-portal">
+        <article class="grid gap-24 text-secondary-fg sm:grid-cols-2 sm:gap-x-12"></article>
+      </div>
+    `;
+
+    expect(findHotkeyGuideArticle()).not.toBeNull();
+  });
+
+  it('ignores other modal articles', () => {
+    document.body.innerHTML = `
+      <div id="modal-portal">
+        <article role="dialog" class="bp-modal-container"></article>
+      </div>
+    `;
+
+    expect(findHotkeyGuideArticle()).toBeNull();
   });
 });
 
