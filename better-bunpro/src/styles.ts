@@ -82,6 +82,12 @@ const CSS = `
   margin: 0 auto;
   padding: 0 0.375rem 0.5rem;
 }
+html.bb-skipping-undo-modal .Modal,
+html.bb-skipping-undo-modal #tooltip-portal,
+html.bb-skipping-undo-modal .Toast {
+  visibility: hidden !important;
+  opacity: 0 !important;
+}
 .bb-popover {
   width: max-content;
   max-width: min(20rem, calc(100vw - 1rem));

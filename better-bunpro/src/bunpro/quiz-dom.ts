@@ -104,6 +104,79 @@ export function findUndoButton(): HTMLElement | null {
   return document.querySelector('svg[data-name="UNDO"]')?.closest('button') ?? null;
 }
 
+const UNDO_WARNING_ID = 'quiz-undo';
+const SKIP_UNDO_MODAL_CLASS = 'bb-skipping-undo-modal';
+const UNDO_PROMPT_WAIT_MS = 400;
+/** Bunpro auto-dismisses the undo toast after 2s (`isDelayedClose`). */
+const UNDO_TOAST_MS = 2200;
+
+let restoreUndoFeedbackTimer: ReturnType<typeof setTimeout> | null = null;
+
+/**
+ * Bunpro's undo warning is the only dialog that mounts a `#quiz-undo`
+ * "don't show again" checkbox. Confirm is the last full-width action; cancel
+ * is the first. Never click the checkbox: that would hide the warning for
+ * later real undos.
+ */
+export function findUndoConfirmButton(): HTMLElement | null {
+  const warning = document.getElementById(UNDO_WARNING_ID);
+  const dialog = warning?.closest('article[role="dialog"]');
+  if (!dialog) {
+    return null;
+  }
+  const actions = dialog.querySelectorAll<HTMLElement>('button.w-full');
+  return actions.length > 0 ? (actions[actions.length - 1] ?? null) : null;
+}
+
+/**
+ * Retracts the last graded answer. If Bunpro asks to confirm, accept that
+ * prompt without ticking "don't show again", and hide the "answer undone"
+ * toast that would otherwise follow.
+ */
+export function undoGradedAnswer(): void {
+  const undo = findUndoButton();
+  if (!undo) {
+    return;
+  }
+  hideUndoFeedback();
+  undo.click();
+  const confirm = findUndoConfirmButton();
+  if (confirm) {
+    confirm.click();
+    return;
+  }
+  waitForUndoConfirm();
+}
+
+function hideUndoFeedback(): void {
+  document.documentElement.classList.add(SKIP_UNDO_MODAL_CLASS);
+  if (restoreUndoFeedbackTimer !== null) {
+    window.clearTimeout(restoreUndoFeedbackTimer);
+  }
+  restoreUndoFeedbackTimer = window.setTimeout(showUndoFeedback, UNDO_TOAST_MS);
+}
+
+function waitForUndoConfirm(): void {
+  const observer = new MutationObserver(() => {
+    const confirm = findUndoConfirmButton();
+    if (!confirm) {
+      return;
+    }
+    window.clearTimeout(timeout);
+    observer.disconnect();
+    confirm.click();
+  });
+  const timeout = window.setTimeout(() => {
+    observer.disconnect();
+  }, UNDO_PROMPT_WAIT_MS);
+  observer.observe(document.body, { childList: true, subtree: true });
+}
+
+function showUndoFeedback(): void {
+  restoreUndoFeedbackTimer = null;
+  document.documentElement.classList.remove(SKIP_UNDO_MODAL_CLASS);
+}
+
 /** The row around the field, which Bunpro outlines in red for a wrong answer. */
 export function findAnswerConsole(): HTMLElement | null {
   return document.querySelector<HTMLElement>('.InputManual');

@@ -1,4 +1,4 @@
-import { findQuizArticle, findQuizConsole, findUndoButton, showAnswerInput } from '../../bunpro/quiz-dom';
+import { findQuizArticle, findQuizConsole, showAnswerInput, undoGradedAnswer } from '../../bunpro/quiz-dom';
 import { readQuizState, watchQuizState, type QuizState } from '../../bunpro/quiz-state';
 import { reviewKey } from '../../bunpro/review';
 import { addUserSynonym } from '../../bunpro/synonyms';
@@ -106,7 +106,7 @@ function acceptAsCorrect(state: QuizState, review: string | null, synonym: strin
     rememberAcceptedGuess(review, synonym, official);
   }
   if (state.isPostAttempt && !state.isCorrect) {
-    findUndoButton()?.click();
+    undoGradedAnswer();
     return;
   }
   if (review !== null) {
