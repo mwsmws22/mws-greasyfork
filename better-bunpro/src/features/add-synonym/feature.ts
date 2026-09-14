@@ -1,4 +1,4 @@
-import { findQuizArticle, findQuizConsole, findUndoButton } from '../../bunpro/quiz-dom';
+import { fillAnswerInput, findQuizArticle, findQuizConsole, findUndoButton } from '../../bunpro/quiz-dom';
 import { readQuizState, watchQuizState, type QuizState } from '../../bunpro/quiz-state';
 import { reviewKey } from '../../bunpro/review';
 import { addUserSynonym } from '../../bunpro/synonyms';
@@ -17,6 +17,7 @@ const PLUS_SHAPES =
 let stopWatchingQuiz: (() => void) | null = null;
 let remountObserver: MutationObserver | null = null;
 let addedFor: string | null = null;
+let addedGuess: string | null = null;
 
 export const addSynonymFeature: Feature = {
   id: 'add-synonym',
@@ -43,12 +44,14 @@ export const addSynonymFeature: Feature = {
     remountObserver = null;
     removeButton();
     addedFor = null;
+    addedGuess = null;
   },
 };
 
 function syncButton(state: QuizState): void {
   const review = reviewKey(state);
   if (review !== null && addedFor === review) {
+    restoreGuess(state, addedGuess);
     markGuessCorrect();
   }
   if (!shouldOfferSynonym(state) || !findQuizArticle()) {
@@ -85,6 +88,7 @@ function buildSlot(state: QuizState): HTMLElement {
       }
       const outcome = await addUserSynonym(vocabId, synonym);
       addedFor = review;
+      addedGuess = synonym;
       acceptAsCorrect(state, review, synonym);
       return outcome === 'already-there' ? 'Already a synonym' : undefined;
     },
@@ -102,6 +106,13 @@ function acceptAsCorrect(state: QuizState, review: string | null, synonym: strin
   if (state.isPostAttempt && !state.isCorrect) {
     findUndoButton()?.click();
   }
+}
+
+function restoreGuess(state: QuizState, guess: string | null): void {
+  if (guess === null || state.isPostAttempt || state.isRevealing) {
+    return;
+  }
+  fillAnswerInput(guess);
 }
 
 function removeButton(): void {

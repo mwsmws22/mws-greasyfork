@@ -16,4 +16,10 @@ describe('accepted guess after adding a synonym', () => {
     expect(takeAcceptedOfficial('vocab:1@s', 'other')).toBeNull();
     expect(takeAcceptedOfficial('vocab:1@s', 'gunun')).toBe('to have guts');
   });
+
+  it('still recognises the guess after Bunpro undo strips the last character', () => {
+    rememberAcceptedGuess('vocab:1@s', 'gunun', 'to have guts');
+
+    expect(takeAcceptedOfficial('vocab:1@s', 'gunu')).toBe('to have guts');
+  });
 });

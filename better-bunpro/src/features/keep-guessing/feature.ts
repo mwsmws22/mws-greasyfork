@@ -1,4 +1,4 @@
-import { findAnswerInput, findSubmitButton } from '../../bunpro/quiz-dom';
+import { fillAnswerInput, findAnswerInput, findSubmitButton } from '../../bunpro/quiz-dom';
 import { readQuizState, type QuizState } from '../../bunpro/quiz-state';
 import { reviewKey } from '../../bunpro/review';
 import { injectStyles } from '../../styles';
@@ -83,7 +83,7 @@ function isWrongGuess(): boolean {
   if (official !== null) {
     lastRejected = null;
     if (official !== guess) {
-      fillAnswer(input, official);
+      fillAnswerInput(official);
     }
     return false;
   }
@@ -102,11 +102,6 @@ function isWrongGuess(): boolean {
 /** Once a question has been answered, Enter moves on and is none of our business. */
 function isAwaitingTypedAnswer(state: QuizState): boolean {
   return state.inputMode === 'manual' && !state.isPostAttempt && !state.isRevealing;
-}
-
-function fillAnswer(input: HTMLInputElement, value: string): void {
-  input.value = value;
-  input.dispatchEvent(new Event('input', { bubbles: true }));
 }
 
 function hasModifier(event: KeyboardEvent): boolean {

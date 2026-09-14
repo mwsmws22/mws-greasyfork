@@ -61,6 +61,20 @@ export function findAnswerInput(): HTMLInputElement | null {
   return document.querySelector<HTMLInputElement>('#js-manual-input');
 }
 
+/**
+ * Writes through the native value setter so React's onInput sees the change.
+ * Assigning `.value` alone leaves Bunpro's state on the previous text.
+ */
+export function fillAnswerInput(value: string): void {
+  const input = findAnswerInput();
+  if (!input || input.value === value) {
+    return;
+  }
+  const native = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')?.set;
+  native?.call(input, value);
+  input.dispatchEvent(new Event('input', { bubbles: true }));
+}
+
 /** Submits the answer, then becomes the button that moves on to the next question. */
 export function findSubmitButton(): HTMLElement | null {
   return document.querySelector<HTMLElement>('.InputManual__button');
