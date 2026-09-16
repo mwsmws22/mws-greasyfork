@@ -1,9 +1,9 @@
 // ==UserScript==
 // @name         Better Bunpro
 // @namespace    mwsmws22
-// @version      0.4.1
+// @version      0.5.0
 // @author       mwsmws22
-// @description  Features I wish Bunpro had. Show example sentences for A1+ vocab after a correct answer, cycle sentences with Tab, keep guessing after a wrong answer, play real speakers instead of synthesised term audio, and more.
+// @description  Features I wish Bunpro had. Show example sentences for A1+ vocab after a correct answer, cycle sentences with Tab, keep guessing after a wrong answer, add a missed translation as a synonym, play real speakers instead of synthesised term audio, and more.
 // @license      MIT
 // @match        https://bunpro.jp/*
 // @connect      assets.languagepod101.com
@@ -97,17 +97,83 @@
 	function findAnswerInput() {
 		return document.querySelector("#js-manual-input");
 	}
+	function fillAnswerInput(value) {
+		const input = findAnswerInput();
+		if (!input || input.value === value) return;
+		writeAnswerInput(input, value);
+		input.dispatchEvent(new Event("input", { bubbles: true }));
+	}
+	function showAnswerInput(value) {
+		const input = findAnswerInput();
+		if (!input) return;
+		input.placeholder = value;
+		if (input.value !== value) writeAnswerInput(input, value);
+	}
+	function writeAnswerInput(input, value) {
+		(Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")?.set)?.call(input, value);
+	}
 	function findSubmitButton() {
 		return document.querySelector(".InputManual__button");
 	}
 	function findUndoButton() {
 		return document.querySelector("svg[data-name=\"UNDO\"]")?.closest("button") ?? null;
 	}
+	var UNDO_WARNING_ID = "quiz-undo";
+	var SKIP_UNDO_MODAL_CLASS = "bb-skipping-undo-modal";
+	var UNDO_PROMPT_WAIT_MS = 400;
+	var UNDO_TOAST_MS = 2200;
+	var restoreUndoFeedbackTimer = null;
+	function findUndoConfirmButton() {
+		const dialog = document.getElementById(UNDO_WARNING_ID)?.closest("article[role=\"dialog\"]");
+		if (!dialog) return null;
+		const actions = dialog.querySelectorAll("button.w-full");
+		return actions.length > 0 ? actions[actions.length - 1] ?? null : null;
+	}
+	function undoGradedAnswer() {
+		const undo = findUndoButton();
+		if (!undo) return;
+		hideUndoFeedback();
+		undo.click();
+		const confirm = findUndoConfirmButton();
+		if (confirm) {
+			confirm.click();
+			return;
+		}
+		waitForUndoConfirm();
+	}
+	function hideUndoFeedback() {
+		document.documentElement.classList.add(SKIP_UNDO_MODAL_CLASS);
+		if (restoreUndoFeedbackTimer !== null) window.clearTimeout(restoreUndoFeedbackTimer);
+		restoreUndoFeedbackTimer = window.setTimeout(showUndoFeedback, UNDO_TOAST_MS);
+	}
+	function waitForUndoConfirm() {
+		const observer = new MutationObserver(() => {
+			const confirm = findUndoConfirmButton();
+			if (!confirm) return;
+			window.clearTimeout(timeout);
+			observer.disconnect();
+			confirm.click();
+		});
+		const timeout = window.setTimeout(() => {
+			observer.disconnect();
+		}, UNDO_PROMPT_WAIT_MS);
+		observer.observe(document.body, {
+			childList: true,
+			subtree: true
+		});
+	}
+	function showUndoFeedback() {
+		restoreUndoFeedbackTimer = null;
+		document.documentElement.classList.remove(SKIP_UNDO_MODAL_CLASS);
+	}
 	function findAnswerConsole() {
 		return document.querySelector(".InputManual");
 	}
 	function findQuizConsole() {
 		return document.querySelector(`${QUIZ_ARTICLE} .bp-quiz-console`);
+	}
+	function findHotkeyGuideArticle() {
+		return document.querySelector("#modal-portal article.grid.gap-24.text-secondary-fg");
 	}
 	function findQuizToolbar() {
 		const rows = document.querySelectorAll(`${QUIZ_ARTICLE} > header ul`);
@@ -443,6 +509,12 @@
   margin: 0 auto;
   padding: 0 0.375rem 0.5rem;
 }
+html.bb-skipping-undo-modal .Modal,
+html.bb-skipping-undo-modal #tooltip-portal,
+html.bb-skipping-undo-modal .Toast {
+  visibility: hidden !important;
+  opacity: 0 !important;
+}
 .bb-popover {
   width: max-content;
   max-width: min(20rem, calc(100vw - 1rem));
@@ -519,6 +591,38 @@ input.bb-correct-guess {
 		paint();
 		return button;
 	}
+	var claims = [];
+	function claimKeystrokes(node, onEscape) {
+		const claim = {
+			node,
+			onEscape
+		};
+		claims.push(claim);
+		if (claims.length === 1) window.addEventListener("keydown", onKeyDown$3, true);
+		return () => {
+			const index = claims.indexOf(claim);
+			if (index !== -1) claims.splice(index, 1);
+			if (claims.length === 0) window.removeEventListener("keydown", onKeyDown$3, true);
+		};
+	}
+	function areKeystrokesClaimed() {
+		return claims.length > 0;
+	}
+	function hasModifier(event) {
+		return event.altKey || event.ctrlKey || event.metaKey || event.shiftKey;
+	}
+	function onKeyDown$3(event) {
+		const newest = claims[claims.length - 1];
+		if (!newest) return;
+		if (event.key === "Escape") {
+			event.preventDefault();
+			event.stopPropagation();
+			newest.onEscape();
+			return;
+		}
+		const target = event.target;
+		if (target instanceof Node && claims.some((claim) => claim.node.contains(target))) event.stopPropagation();
+	}
 	var accepted = null;
 	function rememberAcceptedGuess(reviewKey, guess, official) {
 		accepted = {
@@ -528,10 +632,20 @@ input.bb-correct-guess {
 		};
 	}
 	function takeAcceptedOfficial(reviewKey, guess) {
-		if (accepted === null || accepted.reviewKey !== reviewKey || accepted.guess !== guess) return null;
-		const official = accepted.official;
+		if (accepted === null || accepted.reviewKey !== reviewKey || !isRememberedGuess(accepted.guess, guess)) return null;
+		return takeOfficial();
+	}
+	function takeAcceptedOfficialForReview(reviewKey) {
+		if (accepted === null || accepted.reviewKey !== reviewKey) return null;
+		return takeOfficial();
+	}
+	function takeOfficial() {
+		const official = accepted?.official ?? "";
 		accepted = null;
 		return official;
+	}
+	function isRememberedGuess(original, guess) {
+		return guess === original || guess === original.slice(0, -1);
 	}
 	var WRONG_CLASS = "bb-wrong-guess";
 	var CORRECT_CLASS = "bb-correct-guess";
@@ -575,18 +689,147 @@ input.bb-correct-guess {
 		input.addEventListener("input", clearMark);
 		input.addEventListener("animationend", () => input.classList.remove(SHAKE_CLASS));
 	}
+	var TRANSLATION_SIMILARITY = .8;
+	var LATIN_LETTER = /[a-z]/i;
+	function gradeAnswer(questionMode, answers, typed) {
+		const guess = typed.trim();
+		if (guess === "" || answers.length === 0) return "unknown";
+		if (questionMode === "translate") return gradedBySimilarity(answers, guess);
+		if (questionMode === "reading") return gradedExactly(answers, guess);
+		return "unknown";
+	}
+	function gradedBySimilarity(answers, guess) {
+		return Math.max(...answers.map((answer) => similarity(normalize(answer), normalize(guess)))) >= TRANSLATION_SIMILARITY ? "accepted" : "rejected";
+	}
+	function gradedExactly(answers, guess) {
+		if (LATIN_LETTER.test(guess)) return "unknown";
+		return answers.some((answer) => normalize(answer) === normalize(guess)) ? "accepted" : "rejected";
+	}
+	function similarity(left, right) {
+		if (left.length === 0) return right.length === 0 ? 1 : 0;
+		if (right.length === 0) return 0;
+		return 1 - distance(left, right) / Math.max(left.length, right.length);
+	}
+	function distance(left, right) {
+		const target = [...right];
+		let row = target.map((_, column) => column + 1);
+		[...left].forEach((source, sourceIndex) => {
+			let diagonal = sourceIndex;
+			let previous = sourceIndex + 1;
+			row = row.map((above, column) => {
+				const cell = Math.min(diagonal + (source === target[column] ? 0 : 1), above + 1, previous + 1);
+				diagonal = above;
+				previous = cell;
+				return cell;
+			});
+		});
+		return row[target.length - 1] ?? left.length;
+	}
+	var SUBMIT_KEY = "Enter";
+	var lastRejected = null;
+	var officialSubmitTimer = null;
+	var keepGuessingFeature = {
+		id: "keep-guessing",
+		title: "Keep guessing after a wrong answer",
+		description: "On a review you type an English translation or a reading into, Bunpro reveals the answer the moment you get it wrong. With this on, a wrong answer is not submitted at all: your text stays in the box so you can try again. To give up and see the answer, either clear the box and press Enter, or press Enter again on the same wrong answer. Because a guess this catches never reaches Bunpro, the review is graded on the answer you finally submit.",
+		enabledByDefault: true,
+		start() {
+			injectStyles();
+			window.addEventListener("keydown", onKeyDown$2, true);
+			window.addEventListener("click", onClick, true);
+		},
+		stop() {
+			window.removeEventListener("keydown", onKeyDown$2, true);
+			window.removeEventListener("click", onClick, true);
+			lastRejected = null;
+			if (officialSubmitTimer !== null) {
+				window.clearTimeout(officialSubmitTimer);
+				officialSubmitTimer = null;
+			}
+		}
+	};
+	function onKeyDown$2(event) {
+		if (event.key !== SUBMIT_KEY || event.repeat || hasModifier(event) || areKeystrokesClaimed()) return;
+		swallowIfWrong(event);
+	}
+	function onClick(event) {
+		const target = event.target;
+		if (!(target instanceof Node) || findSubmitButton()?.contains(target) !== true) return;
+		swallowIfWrong(event);
+	}
+	function swallowIfWrong(event) {
+		if (submitRememberedAsCorrect(event)) return;
+		if (!isWrongGuess()) return;
+		event.preventDefault();
+		event.stopPropagation();
+		markGuessWrong();
+	}
+	function submitRememberedAsCorrect(event) {
+		const input = findAnswerInput();
+		const state = readQuizState();
+		if (!input || !isAwaitingTypedAnswer(state)) return false;
+		const review = reviewKey(state);
+		if (!review) return false;
+		const official = takeAcceptedOfficial(review, input.value.trim());
+		if (official === null) return false;
+		lastRejected = null;
+		event.preventDefault();
+		event.stopPropagation();
+		queueOfficialSubmit(official);
+		return true;
+	}
+	function submitAcceptedStandIn(reviewKey) {
+		const official = takeAcceptedOfficialForReview(reviewKey);
+		if (official === null) return false;
+		lastRejected = null;
+		queueOfficialSubmit(official);
+		return true;
+	}
+	function queueOfficialSubmit(official) {
+		fillAnswerInput(official);
+		if (officialSubmitTimer !== null) window.clearTimeout(officialSubmitTimer);
+		officialSubmitTimer = window.setTimeout(() => {
+			officialSubmitTimer = null;
+			fillAnswerInput(official);
+			findSubmitButton()?.click();
+		}, 0);
+	}
+	function isWrongGuess() {
+		const input = findAnswerInput();
+		const state = readQuizState();
+		if (!input || !isAwaitingTypedAnswer(state)) return false;
+		const review = reviewKey(state);
+		if (!review) return false;
+		const guess = input.value.trim();
+		if (lastRejected?.reviewKey === review && lastRejected.guess === guess) {
+			lastRejected = null;
+			return false;
+		}
+		if (gradeAnswer(state.questionMode, state.answers, guess) !== "rejected") return false;
+		lastRejected = {
+			reviewKey: review,
+			guess
+		};
+		return true;
+	}
+	function isAwaitingTypedAnswer(state) {
+		return state.inputMode === "manual" && !state.isPostAttempt && !state.isRevealing;
+	}
 	function shouldOfferSynonym(state) {
 		return state.reviewable?.type === "vocab" && state.inputMode === "manual" && state.questionMode === "translate" && state.isPostAttempt && !state.isCorrect && synonymWorthAdding(state.submittedAnswer ?? "", state.answers);
 	}
 	var SLOT_ID = "bb-add-synonym";
+	var SYNONYM_KEY = "s";
 	var PLUS_SHAPES = "<path d=\"M12 5v14M5 12h14\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\"/>";
 	var stopWatchingQuiz$3 = null;
 	var remountObserver = null;
 	var addedFor = null;
+	var addedGuess = null;
+	var standInQueuedFor = null;
 	var addSynonymFeature = {
 		id: "add-synonym",
 		title: "Add a wrong answer as a synonym",
-		description: "After you miss a vocab translation, Bunpro hides \"Your Synonyms\" down in More Info. With this on, an Add as synonym button sits next to the wrong answer so you can accept what you typed without scrolling. Adding it also marks this review correct: the field turns green, and Enter submits a pass. The guess is saved through the same request Bunpro's own synonym field uses, and a guess it already accepts is not offered again.",
+		description: "After you miss a vocab translation, Bunpro hides \"Your Synonyms\" down in More Info. With this on, an Add as synonym button sits next to the wrong answer so you can accept what you typed without scrolling. Adding it saves the guess and immediately marks this review correct. Press S for the same action. The guess is saved through the same request Bunpro's own synonym field uses, and a guess it already accepts is not offered again.",
 		enabledByDefault: true,
 		start() {
 			injectStyles();
@@ -596,19 +839,23 @@ input.bb-correct-guess {
 				childList: true,
 				subtree: true
 			});
+			window.addEventListener("keydown", onKeyDown$1, true);
 		},
 		stop() {
+			window.removeEventListener("keydown", onKeyDown$1, true);
 			stopWatchingQuiz$3?.();
 			stopWatchingQuiz$3 = null;
 			remountObserver?.disconnect();
 			remountObserver = null;
 			removeButton();
 			addedFor = null;
+			addedGuess = null;
+			standInQueuedFor = null;
 		}
 	};
 	function syncButton(state) {
 		const review = reviewKey(state);
-		if (review !== null && addedFor === review) markGuessCorrect();
+		if (review !== null && addedFor === review) followThroughAcceptedGuess(state, review);
 		if (!shouldOfferSynonym(state) || !findQuizArticle()) {
 			removeButton();
 			return;
@@ -617,6 +864,14 @@ input.bb-correct-guess {
 		const console = findQuizConsole();
 		if (!console) return;
 		console.before(buildSlot(state));
+	}
+	function onKeyDown$1(event) {
+		if (event.key !== SYNONYM_KEY || event.repeat || hasModifier(event) || areKeystrokesClaimed()) return;
+		const button = document.querySelector(`#${SLOT_ID} button`);
+		if (!button) return;
+		event.preventDefault();
+		event.stopPropagation();
+		if (!button.disabled) button.click();
 	}
 	function buildSlot(state) {
 		const review = reviewKey(state);
@@ -635,6 +890,7 @@ input.bb-correct-guess {
 				if (vocabId === void 0) throw new Error("No vocab id on the current review");
 				const outcome = await addUserSynonym(vocabId, synonym);
 				addedFor = review;
+				addedGuess = synonym;
 				acceptAsCorrect(state, review, synonym);
 				return outcome === "already-there" ? "Already a synonym" : void 0;
 			}
@@ -647,7 +903,28 @@ input.bb-correct-guess {
 	function acceptAsCorrect(state, review, synonym) {
 		markGuessCorrect();
 		if (review !== null && synonym !== "") rememberAcceptedGuess(review, synonym, state.answers[0]?.trim() || synonym);
-		if (state.isPostAttempt && !state.isCorrect) findUndoButton()?.click();
+		if (state.isPostAttempt && !state.isCorrect) {
+			undoGradedAnswer();
+			return;
+		}
+		if (review !== null) queueStandIn(review);
+	}
+	function followThroughAcceptedGuess(state, review) {
+		if (!state.isPostAttempt && !state.isRevealing) {
+			queueStandIn(review);
+			return;
+		}
+		showAddedGuess();
+	}
+	function queueStandIn(review) {
+		if (standInQueuedFor === review) return;
+		standInQueuedFor = review;
+		submitAcceptedStandIn(review);
+	}
+	function showAddedGuess() {
+		if (addedGuess === null) return;
+		showAnswerInput(addedGuess);
+		markGuessCorrect();
 	}
 	function removeButton() {
 		document.getElementById(SLOT_ID)?.remove();
@@ -1238,138 +1515,6 @@ input.bb-correct-guess {
 	function onQuizStateChange$1(state) {
 		if (state.reviewable?.type === "vocab") loadTermAudio(state.reviewable);
 	}
-	var claims = [];
-	function claimKeystrokes(node, onEscape) {
-		const claim = {
-			node,
-			onEscape
-		};
-		claims.push(claim);
-		if (claims.length === 1) window.addEventListener("keydown", onKeyDown$2, true);
-		return () => {
-			const index = claims.indexOf(claim);
-			if (index !== -1) claims.splice(index, 1);
-			if (claims.length === 0) window.removeEventListener("keydown", onKeyDown$2, true);
-		};
-	}
-	function areKeystrokesClaimed() {
-		return claims.length > 0;
-	}
-	function onKeyDown$2(event) {
-		const newest = claims[claims.length - 1];
-		if (!newest) return;
-		if (event.key === "Escape") {
-			event.preventDefault();
-			event.stopPropagation();
-			newest.onEscape();
-			return;
-		}
-		const target = event.target;
-		if (target instanceof Node && claims.some((claim) => claim.node.contains(target))) event.stopPropagation();
-	}
-	var TRANSLATION_SIMILARITY = .8;
-	var LATIN_LETTER = /[a-z]/i;
-	function gradeAnswer(questionMode, answers, typed) {
-		const guess = typed.trim();
-		if (guess === "" || answers.length === 0) return "unknown";
-		if (questionMode === "translate") return gradedBySimilarity(answers, guess);
-		if (questionMode === "reading") return gradedExactly(answers, guess);
-		return "unknown";
-	}
-	function gradedBySimilarity(answers, guess) {
-		return Math.max(...answers.map((answer) => similarity(normalize(answer), normalize(guess)))) >= TRANSLATION_SIMILARITY ? "accepted" : "rejected";
-	}
-	function gradedExactly(answers, guess) {
-		if (LATIN_LETTER.test(guess)) return "unknown";
-		return answers.some((answer) => normalize(answer) === normalize(guess)) ? "accepted" : "rejected";
-	}
-	function similarity(left, right) {
-		if (left.length === 0) return right.length === 0 ? 1 : 0;
-		if (right.length === 0) return 0;
-		return 1 - distance(left, right) / Math.max(left.length, right.length);
-	}
-	function distance(left, right) {
-		const target = [...right];
-		let row = target.map((_, column) => column + 1);
-		[...left].forEach((source, sourceIndex) => {
-			let diagonal = sourceIndex;
-			let previous = sourceIndex + 1;
-			row = row.map((above, column) => {
-				const cell = Math.min(diagonal + (source === target[column] ? 0 : 1), above + 1, previous + 1);
-				diagonal = above;
-				previous = cell;
-				return cell;
-			});
-		});
-		return row[target.length - 1] ?? left.length;
-	}
-	var SUBMIT_KEY = "Enter";
-	var lastRejected = null;
-	var keepGuessingFeature = {
-		id: "keep-guessing",
-		title: "Keep guessing after a wrong answer",
-		description: "On a review you type an English translation or a reading into, Bunpro reveals the answer the moment you get it wrong. With this on, a wrong answer is not submitted at all: your text stays in the box so you can try again. To give up and see the answer, either clear the box and press Enter, or press Enter again on the same wrong answer. Because a guess this catches never reaches Bunpro, the review is graded on the answer you finally submit.",
-		enabledByDefault: true,
-		start() {
-			injectStyles();
-			window.addEventListener("keydown", onKeyDown$1, true);
-			window.addEventListener("click", onClick, true);
-		},
-		stop() {
-			window.removeEventListener("keydown", onKeyDown$1, true);
-			window.removeEventListener("click", onClick, true);
-			lastRejected = null;
-		}
-	};
-	function onKeyDown$1(event) {
-		if (event.key !== SUBMIT_KEY || event.repeat || hasModifier$1(event) || areKeystrokesClaimed()) return;
-		swallowIfWrong(event);
-	}
-	function onClick(event) {
-		const target = event.target;
-		if (!(target instanceof Node) || findSubmitButton()?.contains(target) !== true) return;
-		swallowIfWrong(event);
-	}
-	function swallowIfWrong(event) {
-		if (!isWrongGuess()) return;
-		event.preventDefault();
-		event.stopPropagation();
-		markGuessWrong();
-	}
-	function isWrongGuess() {
-		const input = findAnswerInput();
-		const state = readQuizState();
-		if (!input || !isAwaitingTypedAnswer(state)) return false;
-		const review = reviewKey(state);
-		if (!review) return false;
-		const guess = input.value.trim();
-		const official = takeAcceptedOfficial(review, guess);
-		if (official !== null) {
-			lastRejected = null;
-			if (official !== guess) fillAnswer(input, official);
-			return false;
-		}
-		if (lastRejected?.reviewKey === review && lastRejected.guess === guess) {
-			lastRejected = null;
-			return false;
-		}
-		if (gradeAnswer(state.questionMode, state.answers, guess) !== "rejected") return false;
-		lastRejected = {
-			reviewKey: review,
-			guess
-		};
-		return true;
-	}
-	function isAwaitingTypedAnswer(state) {
-		return state.inputMode === "manual" && !state.isPostAttempt && !state.isRevealing;
-	}
-	function fillAnswer(input, value) {
-		input.value = value;
-		input.dispatchEvent(new Event("input", { bubbles: true }));
-	}
-	function hasModifier$1(event) {
-		return event.altKey || event.ctrlKey || event.metaKey || event.shiftKey;
-	}
 	function bunproSentenceIndex(sentences) {
 		const shownId = nativeSentenceId();
 		if (shownId !== null) {
@@ -1450,9 +1595,6 @@ input.bb-correct-guess {
 		event.stopPropagation();
 		cycleSentence(reviewKey, state.reviewable);
 	}
-	function hasModifier(event) {
-		return event.altKey || event.ctrlKey || event.metaKey || event.shiftKey;
-	}
 	function hasSentenceToCycle(reviewKey) {
 		return shownSentence()?.reviewKey === reviewKey || findNativeSentenceCard() !== null || findClozeSentence() !== null;
 	}
@@ -1466,7 +1608,13 @@ input.bb-correct-guess {
 			index: nextSentenceIndex(shown?.reviewKey === reviewKey ? shown.index : bunproSentenceIndex(sentences), sentences.length)
 		});
 	}
-	var version = "0.4.1";
+	var TUNE_SHAPES = `<g fill="currentColor">
+  <rect x="3" y="6" width="18" height="2" rx="1"/>
+  <rect x="3" y="16" width="18" height="2" rx="1"/>
+  <circle cx="9" cy="7" r="3.25"/>
+  <circle cx="15" cy="17" r="3.25"/>
+</g>`;
+	var version = "0.5.0";
 	var PANEL_ID = "bb-settings-panel";
 	var CARD_CLASS = "bb-panel-card relative z-1 flex flex-col overflow-hidden rounded-normal border border-rim bg-secondary-bg text-primary-fg shadow-normal";
 	var CLOSE_SHAPES = "<path d=\"M6 6 18 18M18 6 6 18\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\"/>";
@@ -1560,12 +1708,6 @@ input.bb-correct-guess {
 		return button;
 	}
 	var LAUNCHER_MARKER = "data-bb-launcher";
-	var TUNE_SHAPES = `<g fill="currentColor">
-  <rect x="3" y="6" width="18" height="2" rx="1"/>
-  <rect x="3" y="16" width="18" height="2" rx="1"/>
-  <circle cx="9" cy="7" r="3.25"/>
-  <circle cx="15" cy="17" r="3.25"/>
-</g>`;
 	function mountSettingsLaunchers() {
 		_GM_registerMenuCommand("Settings", toggleSettingsPanel);
 		keepToolbarButtonMounted();
@@ -1599,11 +1741,45 @@ input.bb-correct-guess {
 		button.addEventListener("click", toggleSettingsPanel);
 		return element("li", { [LAUNCHER_MARKER]: "" }, [button]);
 	}
+	var HOTKEY_GUIDE_SECTION_ID = "bb-hotkey-guide";
+	function buildBetterBunproGuideSection(rows) {
+		return element("section", { id: HOTKEY_GUIDE_SECTION_ID }, [element("h2", { class: "mb-8 flex items-center gap-8 font-bold text-primary-fg" }, [svgIcon("ml-4 h-30 w-30 shrink-0", TUNE_SHAPES), element("span", {}, ["Better Bunpro"])]), element("ul", { class: "grid h-fit w-full gap-8" }, rows.map((row) => buildRow(row)))]);
+	}
+	function buildRow(row) {
+		return element("li", { class: "rounded-normal bg-primary-bg px-12 py-8 text-small sm:py-10" }, [element("div", { class: "flex items-center justify-between" }, [element("div", { class: "flex items-center justify-center gap-6" }, [element("p", {}, [row.desc])]), element("p", { class: "text-right font-bold text-primary-fg" }, [row.key])])]);
+	}
+	function mountHotkeyGuide() {
+		const mount = () => {
+			const article = findHotkeyGuideArticle();
+			if (!article || document.getElementById("bb-hotkey-guide")) return;
+			const rows = visibleRows();
+			if (rows.length === 0) return;
+			article.append(buildBetterBunproGuideSection(rows));
+		};
+		new MutationObserver(mount).observe(document.body, {
+			childList: true,
+			subtree: true
+		});
+		mount();
+	}
+	function visibleRows() {
+		const rows = [];
+		if (isFeatureEnabled(addSynonymFeature)) rows.push({
+			key: "S",
+			desc: "Add as synonym"
+		});
+		if (isFeatureEnabled(sentenceCycleFeature)) rows.push({
+			key: "Tab",
+			desc: "Cycle example sentences"
+		});
+		return rows;
+	}
 	registerFeature(exampleSentenceFeature);
 	registerFeature(sentenceCycleFeature);
 	registerFeature(keepGuessingFeature);
 	registerFeature(humanTermAudioFeature);
 	registerFeature(addSynonymFeature);
 	mountSettingsLaunchers();
+	mountHotkeyGuide();
 	startEnabledFeatures();
 })();

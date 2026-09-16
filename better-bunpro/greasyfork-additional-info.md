@@ -22,6 +22,12 @@ To give up and see the answer, either clear the box and press **Enter**, or pres
 
 Because a guess this catches never reaches Bunpro, the review is graded on the answer you finally submit.
 
+### Add a wrong answer as a synonym
+
+After you miss a vocab translation, Bunpro hides "Your Synonyms" down in More Info. With this on, an **Add as synonym** button sits next to the wrong answer so you can accept what you typed without scrolling. Press **S** for the same action.
+
+Adding it saves the guess through Bunpro's own synonym request and immediately marks this review correct. A guess Bunpro already accepts is not offered again.
+
 ### Play real speakers instead of TTS audio
 
 When Bunpro would play synthesised audio for a vocabulary term, this plays a recording of a person saying it instead, looked up the same way [Yomitan](https://github.com/yomidevs/yomitan) does (JapanesePod101, then Jisho). Sentence audio is left alone, and a term Bunpro already recorded is left alone. If nobody has recorded the word, the synthesised clip still plays.
