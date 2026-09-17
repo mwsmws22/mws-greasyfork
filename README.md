@@ -48,48 +48,5 @@ Tampermonkey script for Pal System meal kit pages. It checks your Paperless docu
 
 ### better-bunpro/
 
-Tampermonkey script for [Bunpro](https://bunpro.jp) reviews. Unlike the other two scripts this one is a
-small TypeScript project built with [vite-plugin-monkey](https://github.com/lisonge/vite-plugin-monkey);
-the file to publish is the built `dist/better-bunpro.user.js`.
-
-**Target page:**
-
-- `https://bunpro.jp/*` — matched broadly because Bunpro routes client-side, so `/reviews` is often
-  reached without a page load. Features activate only when the elements they need are on the page.
-
-**Features:**
-
-- Example sentences for A1+ vocab after a correct answer (when Bunpro shows none)
-- Tab to cycle example sentences
-- Don't spoil the answer on a wrong typed guess
-- Add a missed vocab translation as a synonym (button or **S**)
-- Left Arrow to re-edit a wrong answer without deleting the last character
-- Real speaker audio instead of synthesised term TTS
-
-Full Greasy Fork descriptions: `better-bunpro/greasyfork-additional-info.md`.
-
-**Settings:**
-
-Open the panel from the sliders icon in the site header (between Search and Help), in the quiz
-toolbar next to Bunpro's own settings and styling icons, or from `Settings` in the Tampermonkey
-menu. Feature toggles persist via `GM_setValue`.
-
-**How it works:**
-
-- Reads quiz state from Bunpro's own hidden `#quiz-metadata-element` (`data-meta-*`) rather than
-  inferring it from the rendered DOM
-- Calls `api.bunpro.jp` with the `frontend_api_token` cookie the Bunpro frontend already uses, so no
-  extra credentials are needed
-- Renders furigana and answer highlighting with a port of Bunpro's own renderer, covered by tests that
-  compare against sentences captured from real Bunpro pages
-
-**Development:**
-
-```shell
-cd better-bunpro
-npm install
-npm run dev        # serves the script with live reload
-npm test           # furigana / sentence rendering tests
-npm run typecheck
-npm run build      # writes dist/better-bunpro.user.js
-```
+Moved to its own repo: **[mwsmws22/better-bunpro](https://github.com/mwsmws22/better-bunpro)**  
+Greasy Fork: [Better Bunpro](https://greasyfork.org/en/scripts/595616-better-bunpro)
