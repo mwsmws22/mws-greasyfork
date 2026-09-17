@@ -15,6 +15,11 @@ export const jpod101: AudioSource = {
   placeholderDigest: PLACEHOLDER_DIGEST,
 
   async find(word) {
+    // kanji=委ねる&kana=委ねる is always the placeholder. Skip so the dictionary
+    // source can resolve the real reading (e.g. when Bunpro omits kana).
+    if (kanjiWordMissingReading(word)) {
+      return [];
+    }
     return [jpod101Url(word)];
   },
 };
@@ -32,4 +37,9 @@ export function jpod101Url({ term, reading }: Word): string {
     query.set('kana', reading);
   }
   return `${ENDPOINT}?${query}`;
+}
+
+/** Bunpro sometimes leaves kana null; we then fall back to the spelling as reading. */
+export function kanjiWordMissingReading({ term, reading }: Word): boolean {
+  return term !== '' && reading === term && !isEntirelyKana(term);
 }

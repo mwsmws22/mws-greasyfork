@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Better Bunpro
 // @namespace    mwsmws22
-// @version      0.6.1
+// @version      0.7.0
 // @author       mwsmws22
 // @description  Features I wish Bunpro had. Show example sentences for A1+ vocab after a correct answer, cycle sentences with Tab, keep guessing after a wrong answer, add a missed translation as a synonym, edit a wrong answer with Left Arrow, play real speakers instead of synthesised term audio, and more.
 // @license      MIT
@@ -64,6 +64,33 @@
 	}
 	function enabledKey(feature) {
 		return `feature.${feature.id}.enabled`;
+	}
+	function watchRemounts(root, onRemount) {
+		let watching = false;
+		const observer = new MutationObserver(() => {
+			if (!watching) return;
+			observer.disconnect();
+			try {
+				onRemount();
+			} finally {
+				if (watching) observer.observe(root, {
+					childList: true,
+					subtree: true
+				});
+			}
+		});
+		watching = true;
+		observer.observe(root, {
+			childList: true,
+			subtree: true
+		});
+		return () => {
+			watching = false;
+			observer.disconnect();
+		};
+	}
+	function watchBodyRemounts(onRemount) {
+		return watchRemounts(document.body, onRemount);
 	}
 	var QUIZ_ARTICLE = "#js-quiz article:not(.bp-reviewable-root)";
 	function findQuizArticle() {
@@ -162,20 +189,16 @@
 		restoreUndoFeedbackTimer = window.setTimeout(showUndoFeedback, UNDO_TOAST_MS);
 	}
 	function waitForUndoConfirm() {
-		const observer = new MutationObserver(() => {
+		const stop = watchBodyRemounts(() => {
 			const confirm = findUndoConfirmButton();
 			if (!confirm) return;
 			window.clearTimeout(timeout);
-			observer.disconnect();
+			stop();
 			confirm.click();
 		});
 		const timeout = window.setTimeout(() => {
-			observer.disconnect();
+			stop();
 		}, UNDO_PROMPT_WAIT_MS);
-		observer.observe(document.body, {
-			childList: true,
-			subtree: true
-		});
 	}
 	function showUndoFeedback() {
 		restoreUndoFeedbackTimer = null;
@@ -183,6 +206,31 @@
 	}
 	function findAnswerConsole() {
 		return document.querySelector(".InputManual");
+	}
+	function findTermAudioControls() {
+		const controls = [];
+		const answer = findAnswerBarAudioControl();
+		if (answer) controls.push(answer);
+		const details = findDetailsPitchPlay();
+		if (details && !controls.includes(details)) controls.push(details);
+		return controls;
+	}
+	function findAnswerBarAudioControl() {
+		const answerConsole = findAnswerConsole();
+		if (!answerConsole) return null;
+		for (const name of [
+			"PLAY_CIRCLE_FILLED",
+			"PAUSE",
+			"CANCEL"
+		]) {
+			const button = answerConsole.querySelector(`button:has(svg[data-name="${name}"])`);
+			if (button instanceof HTMLElement) return button;
+		}
+		return null;
+	}
+	function findDetailsPitchPlay() {
+		const button = document.querySelector(".DetailsPitchAccent")?.querySelector("button:has(svg[data-name=\"PLAY_CIRCLE_FILLED\"])");
+		return button instanceof HTMLElement ? button : null;
 	}
 	function findQuizConsole() {
 		return document.querySelector(`${QUIZ_ARTICLE} .bp-quiz-console`);
@@ -246,14 +294,10 @@
 			}
 			emitIfChanged();
 		};
-		const treeObserver = new MutationObserver(bindToMetadataElement);
-		treeObserver.observe(document.body, {
-			childList: true,
-			subtree: true
-		});
+		const treeStop = watchBodyRemounts(bindToMetadataElement);
 		bindToMetadataElement();
 		return () => {
-			treeObserver.disconnect();
+			treeStop();
 			attributeObserver?.disconnect();
 		};
 	}
@@ -525,6 +569,20 @@
   width: min(100%, 36rem);
   margin: 0 auto;
   padding: 0 0.375rem 0.5rem;
+}
+/**
+ * Outweigh Bunpro's \`text-primary-fg\` on the answer-bar play control when a
+ * real recording (not TTS) will play after the answer is in.
+ */
+button.bb-audio-real {
+  color: rgb(var(--c-primary-accent) / 1);
+}
+/**
+ * Details pitch-accent play is Bunpro-accent by default — force primary fg when
+ * only synthesised audio will play, so the tint means a real recording.
+ */
+button.bb-audio-tts {
+  color: rgb(var(--c-primary-fg) / 1);
 }
 html.bb-skipping-undo-modal .Modal,
 html.bb-skipping-undo-modal #tooltip-portal,
@@ -859,7 +917,7 @@ input.bb-correct-guess {
 	var SYNONYM_KEY = "s";
 	var PLUS_SHAPES = "<path d=\"M12 5v14M5 12h14\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\"/>";
 	var stopWatchingQuiz$4 = null;
-	var remountObserver = null;
+	var stopWatchingRemounts$1 = null;
 	var standInQueuedFor = null;
 	var addSynonymFeature = {
 		id: "add-synonym",
@@ -869,19 +927,15 @@ input.bb-correct-guess {
 		start() {
 			injectStyles();
 			stopWatchingQuiz$4 = watchQuizState(syncButton);
-			remountObserver = new MutationObserver(() => syncButton(readQuizState()));
-			remountObserver.observe(document.body, {
-				childList: true,
-				subtree: true
-			});
+			stopWatchingRemounts$1 = watchBodyRemounts(() => syncButton(readQuizState()));
 			window.addEventListener("keydown", onKeyDown$2, true);
 		},
 		stop() {
 			window.removeEventListener("keydown", onKeyDown$2, true);
 			stopWatchingQuiz$4?.();
 			stopWatchingQuiz$4 = null;
-			remountObserver?.disconnect();
-			remountObserver = null;
+			stopWatchingRemounts$1?.();
+			stopWatchingRemounts$1 = null;
 			removeButton();
 			forgetPaintedGuess();
 			standInQueuedFor = null;
@@ -1123,6 +1177,15 @@ input.bb-correct-guess {
 	function furiganaToRuby(text) {
 		return text.replace(FURIGANA_PAIR, (pair, base, reading) => canAnnotate(base, reading) ? toRuby(base, reading) : pair);
 	}
+	function furiganaToWritten(text) {
+		return dropAnnotations(text, (base) => base);
+	}
+	function furiganaToReading(text) {
+		return dropAnnotations(text, (_base, reading) => reading);
+	}
+	function dropAnnotations(text, keep) {
+		return text.replace(FURIGANA_PAIR, (pair, base, reading) => canAnnotate(base, reading) ? keep(base, reading) : pair);
+	}
 	function canAnnotate(base, reading) {
 		if (base === "" || reading === "" || NON_JAPANESE.test(reading)) return false;
 		return STARTS_ANNOTATABLE.test(base) || ALL_FULL_WIDTH.test(base);
@@ -1279,7 +1342,7 @@ input.bb-correct-guess {
 	}
 	var SLOT_CLASS = "bb-sentence-slot mx-auto w-fit animate-fade-in";
 	var mounted = null;
-	var repaintObserver = null;
+	var stopRepaintWatch = null;
 	function shownSentence() {
 		return mounted;
 	}
@@ -1297,8 +1360,8 @@ input.bb-correct-guess {
 		repaintWhenBunproRerenders();
 	}
 	function clearSentence() {
-		repaintObserver?.disconnect();
-		repaintObserver = null;
+		stopRepaintWatch?.();
+		stopRepaintWatch = null;
 		mounted = null;
 		removeStandIns();
 	}
@@ -1319,12 +1382,9 @@ input.bb-correct-guess {
 	function repaintWhenBunproRerenders() {
 		const article = findQuizArticle();
 		if (!article) return;
-		repaintObserver = new MutationObserver(() => {
+		stopRepaintWatch?.();
+		stopRepaintWatch = watchRemounts(article, () => {
 			if (mounted) paintStandIns(mounted.standIns);
-		});
-		repaintObserver.observe(article, {
-			childList: true,
-			subtree: true
 		});
 	}
 	var ROTATION_KEY = "exampleSentence.rotation";
@@ -1389,6 +1449,82 @@ input.bb-correct-guess {
 			sentences,
 			index: pickSentenceIndex(termKey(term), sessionId, sentences.length)
 		});
+	}
+	function labelForOrigin(origin) {
+		switch (origin) {
+			case "jpod101": return "JPod101 Recording";
+			case "jisho": return "Jisho Recording";
+			case "bunpro-tts": return "Bunpro TTS";
+			case "bunpro-rec": return "Bunpro Recording";
+		}
+	}
+	function isRealAudioOrigin(origin) {
+		return origin === "jpod101" || origin === "jisho" || origin === "bunpro-rec";
+	}
+	function originFromSourceName(name) {
+		if (name === "Jisho") return "jisho";
+		if (name.startsWith("JapanesePod101")) return "jpod101";
+		throw new Error(`Unknown audio source: ${name}`);
+	}
+	function bunproOrigin(hasTtsAudio) {
+		return hasTtsAudio ? "bunpro-tts" : "bunpro-rec";
+	}
+	var PLAY_TITLE_BACKUP = "bbAudioTitle";
+	var REAL_AUDIO_CLASS = "bb-audio-real";
+	var TTS_AUDIO_CLASS = "bb-audio-tts";
+	var DEFAULT_PLAY_TITLE = "Open the audio player and play audio";
+	var LEGACY_CHIP_ID = "bb-audio-source";
+	function syncAudioSourceIndicator(cue) {
+		removeLegacyChip();
+		const label = labelForOrigin(cue.origin);
+		const controls = findTermAudioControls();
+		if (controls.length === 0) return;
+		const emphasize = cue.afterSubmit && isRealAudioOrigin(cue.origin);
+		const asTts = cue.afterSubmit && !isRealAudioOrigin(cue.origin);
+		for (const control of controls) {
+			if (control.title === label && control.classList.contains(REAL_AUDIO_CLASS) === emphasize && control.classList.contains(TTS_AUDIO_CLASS) === asTts) continue;
+			rememberPlayTitle(control);
+			if (control.title !== label) control.title = label;
+			control.classList.toggle(REAL_AUDIO_CLASS, emphasize);
+			control.classList.toggle(TTS_AUDIO_CLASS, asTts);
+		}
+	}
+	function clearAudioSourceIndicator() {
+		restorePlayTitles();
+		clearAudioClasses();
+		removeLegacyChip();
+	}
+	function rememberPlayTitle(control) {
+		if (control.dataset[PLAY_TITLE_BACKUP] === void 0) control.dataset[PLAY_TITLE_BACKUP] = control.title || DEFAULT_PLAY_TITLE;
+	}
+	function restorePlayTitles() {
+		for (const control of findTermAudioControls()) {
+			const original = control.dataset[PLAY_TITLE_BACKUP];
+			if (original !== void 0) {
+				control.title = original;
+				delete control.dataset[PLAY_TITLE_BACKUP];
+			}
+		}
+	}
+	function clearAudioClasses() {
+		for (const control of findTermAudioControls()) control.classList.remove(REAL_AUDIO_CLASS, TTS_AUDIO_CLASS);
+	}
+	function removeLegacyChip() {
+		document.getElementById(LEGACY_CHIP_ID)?.remove();
+	}
+	var SENTENCE_PLAY = "button[title=\"Play audio\"]";
+	function exampleOnScreenHasAudio() {
+		const shown = shownSentence();
+		if (shown) {
+			const sentence = shown.sentences[shown.index];
+			if (sentence && studyQuestionHasAudio(sentence)) return true;
+		}
+		if (findNativeSentenceCard()?.querySelector(SENTENCE_PLAY)) return true;
+		const article = findQuizArticle();
+		return Boolean(article?.querySelector(`aside[data-bb-study-question] ${SENTENCE_PLAY}`));
+	}
+	function studyQuestionHasAudio(sentence) {
+		return sentence.male_audio_url !== null || sentence.female_audio_url !== null;
 	}
 	var TIMEOUT_MS = 8e3;
 	function requestText(request) {
@@ -1474,6 +1610,7 @@ input.bb-correct-guess {
 		name: "JapanesePod101",
 		placeholderDigest: "ae6398b5a27bc8c0a771df6c907ade794be15518174773c58c7c7ddd17098906",
 		async find(word) {
+			if (kanjiWordMissingReading(word)) return [];
 			return [jpod101Url(word)];
 		}
 	};
@@ -1482,6 +1619,9 @@ input.bb-correct-guess {
 		if (term !== "" && !(term === reading && isEntirelyKana(term))) query.set("kanji", term);
 		if (reading !== "") query.set("kana", reading);
 		return `${ENDPOINT}?${query}`;
+	}
+	function kanjiWordMissingReading({ term, reading }) {
+		return term !== "" && reading === term && !isEntirelyKana(term);
 	}
 	var AUDIO_SOURCES = [
 		jpod101,
@@ -1499,7 +1639,10 @@ input.bb-correct-guess {
 		try {
 			for (const url of await source.find(word)) {
 				const clip = await requestBlob({ url });
-				if (!await isPlaceholder(clip, source)) return URL.createObjectURL(clip);
+				if (!await isPlaceholder(clip, source)) return {
+					url: URL.createObjectURL(clip),
+					origin: originFromSourceName(source.name)
+				};
 			}
 		} catch (error) {
 			warnOnce(`audio-source:${source.name}`, `Could not reach ${source.name} for audio:`, error);
@@ -1514,11 +1657,14 @@ input.bb-correct-guess {
 		return [...new Uint8Array(digest)].map((byte) => byte.toString(16).padStart(2, "0")).join("");
 	}
 	var recordings = new Map();
-	function remember(ttsUrls, recording) {
-		for (const url of ttsUrls) recordings.set(canonicalAudioUrl(url), recording);
+	function remember(ttsUrls, recording, origin) {
+		for (const url of ttsUrls) recordings.set(canonicalAudioUrl(url), {
+			recording,
+			origin
+		});
 	}
 	function replacementFor(ttsUrl) {
-		return recordings.get(canonicalAudioUrl(ttsUrl)) ?? null;
+		return recordings.get(canonicalAudioUrl(ttsUrl))?.recording ?? null;
 	}
 	function urlToPlay(requested) {
 		return replacementFor(requested) ?? requested;
@@ -1542,15 +1688,21 @@ input.bb-correct-guess {
 		const word = `${audio.term}|${audio.reading}`;
 		let lookup = lookups.get(word);
 		if (!lookup) {
+			const found = findRecording(audio);
 			lookup = {
 				ttsUrls: audio.ttsUrls,
-				recording: findRecording(audio)
+				recording: found.then((hit) => hit?.url ?? null),
+				origin: found.then((hit) => hit?.origin ?? null)
 			};
 			lookups.set(word, lookup);
 			forgetOldest();
 		}
-		const recording = await lookup.recording;
-		if (recording !== null && lookups.get(word) === lookup) remember(lookup.ttsUrls, recording);
+		const [recording, origin] = await Promise.all([lookup.recording, lookup.origin]);
+		if (recording !== null && origin !== null && lookups.get(word) === lookup) {
+			remember(lookup.ttsUrls, recording, origin);
+			return origin;
+		}
+		return null;
 	}
 	function forgetReplacements() {
 		for (const lookup of lookups.values()) lookup.recording.then(revoke);
@@ -1578,14 +1730,22 @@ input.bb-correct-guess {
 			ttsUrls: ttsUrls.map(canonicalAudioUrl)
 		};
 	}
-	async function loadTermAudio(term) {
+	async function loadTermAudio(term, onOrigin, options = {}) {
 		try {
 			const item = await fetchReviewable(term);
-			const audio = item ? synthesisedTermAudio(item) : null;
-			if (audio) await findReplacement(audio);
+			if (!item || !hasTermAudio(item)) return;
+			onOrigin(bunproOrigin(item.has_tts_audio));
+			if (!options.ignoreExampleAudio && exampleOnScreenHasAudio()) return;
+			const audio = synthesisedTermAudio(item);
+			if (!audio) return;
+			const replacement = await findReplacement(audio);
+			if (replacement !== null) onOrigin(replacement);
 		} catch (error) {
 			warnOnce("term-audio", "Could not replace synthesised term audio:", error);
 		}
+	}
+	function hasTermAudio(item) {
+		return item.male_audio_url !== null || item.female_audio_url !== null;
 	}
 	var NATIVES_KEY = Symbol.for("better-bunpro.mediaNatives");
 	var installed = false;
@@ -1639,25 +1799,169 @@ input.bb-correct-guess {
 		});
 		return natives;
 	}
+	var cache = new Map();
+	function searchVocab(query) {
+		let request = cache.get(query);
+		if (!request) {
+			request = requestVocabSearch(query);
+			cache.set(query, request);
+		}
+		return request;
+	}
+	async function requestVocabSearch(query) {
+		return parseVocabSearch((await bunproRequest("/search/reviewables_v1_1", jsonBody("POST", {
+			query,
+			options: {
+				include_reviews: true,
+				include_bookmarks: false,
+				include_notes: false,
+				only_bookmarks: false
+			},
+			is_searching_grammar: false,
+			is_searching_vocab: true
+		})))?.vocabs ?? null);
+	}
+	function parseVocabSearch(vocabs) {
+		const reviews = includedOfType(vocabs, "review");
+		return dataOfType(vocabs, "vocab").map((attributes) => {
+			const furigana = asText(attributes.furigana);
+			return {
+				id: Number(attributes.id),
+				type: "vocab",
+				furigana,
+				written: furiganaToWritten(furigana),
+				reading: furiganaToReading(furigana),
+				meaning: asText(attributes.meaning),
+				slug: asText(attributes.slug),
+				isInReviews: reviews.some((review) => review.reviewable_id === Number(attributes.id))
+			};
+		});
+	}
+	function matchingTerm(terms, word) {
+		return terms.find((term) => term.written === word || term.reading === word) ?? null;
+	}
+	function asText(value) {
+		return typeof value === "string" ? value : "";
+	}
+	function vocabSlugFromPath(pathname = location.pathname) {
+		const match = pathname.match(/^\/vocabs\/([^/]+)\/?$/);
+		if (!match) return null;
+		try {
+			return decodeURIComponent(match[1]);
+		} catch {
+			return match[1];
+		}
+	}
+	async function reviewableFromVocabSlug(slug) {
+		const terms = await searchVocab(slug);
+		const bySlug = terms.find((term) => term.slug === slug);
+		if (bySlug) return {
+			id: bySlug.id,
+			type: "vocab"
+		};
+		const match = matchingTerm(terms, slug);
+		return match ? {
+			id: match.id,
+			type: "vocab"
+		} : null;
+	}
 	var stopWatchingQuiz$1 = null;
+	var stopWatchingRemounts = null;
+	var shownFor = null;
+	var shownOrigin = null;
+	var cueAfterReady = false;
 	var humanTermAudioFeature = {
 		id: "human-term-audio",
 		title: "Play real speakers instead of TTS audio",
-		description: "When Bunpro would play synthesised audio for a vocabulary term, play a recording of a person saying it instead, looked up the same way Yomitan does (JapanesePod101, then Jisho). Sentence audio is left alone, and a term Bunpro already recorded is left alone. If nobody has recorded the word, the synthesised clip still plays.",
+		description: "When Bunpro would play synthesised audio for a vocabulary term, play a recording of a person saying it instead, looked up the same way Yomitan does (JapanesePod101, then Jisho). If the example on screen already has audio — even Bunpro TTS — that clip is left alone and no dictionary lookup runs. On a vocabulary Details page the pitch-accent control is always rewritten. A term Bunpro already recorded is left alone. If nobody has recorded the word, the synthesised clip still plays. After you answer (or always on a Details page), the play button is tinted when a real recording will play, and its tooltip names the source.",
 		enabledByDefault: true,
 		start() {
+			injectStyles();
 			startReplacingAudio();
 			stopWatchingQuiz$1 = watchQuizState(onQuizStateChange$1);
+			stopWatchingRemounts = watchBodyRemounts(() => {
+				if (shownOrigin !== null) paintCue(shownOrigin);
+				if (readQuizState().reviewable?.type !== "vocab") refreshVocabPage();
+			});
 		},
 		stop() {
+			stopWatchingRemounts?.();
+			stopWatchingRemounts = null;
 			stopWatchingQuiz$1?.();
 			stopWatchingQuiz$1 = null;
 			stopReplacingAudio();
 			forgetReplacements();
+			clearAudioSourceIndicator();
+			shownFor = null;
+			shownOrigin = null;
+			cueAfterReady = false;
 		}
 	};
 	function onQuizStateChange$1(state) {
-		if (state.reviewable?.type === "vocab") loadTermAudio(state.reviewable);
+		const review = reviewKey(state);
+		if (state.reviewable?.type === "vocab" && review !== null) {
+			refreshOrigin(state.reviewable, review);
+			return;
+		}
+		refreshVocabPage();
+	}
+	async function refreshOrigin(term, review) {
+		cueAfterReady = false;
+		if (shownFor !== review) {
+			shownFor = review;
+			shownOrigin = null;
+			clearAudioSourceIndicator();
+		}
+		await loadTermAudio(term, (origin) => {
+			if (reviewKey(readQuizState()) !== review) return;
+			shownFor = review;
+			shownOrigin = origin;
+			paintCue(origin);
+		});
+		if (reviewKey(readQuizState()) !== review) return;
+		if (shownFor === review && shownOrigin === null) clearShown();
+		else if (shownOrigin !== null) paintCue(shownOrigin);
+	}
+	async function refreshVocabPage() {
+		const slug = vocabSlugFromPath();
+		if (!slug) {
+			clearShown();
+			return;
+		}
+		const key = `page:${slug}`;
+		cueAfterReady = true;
+		if (shownFor === key && shownOrigin !== null) {
+			paintCue(shownOrigin);
+			return;
+		}
+		if (shownFor !== key) {
+			shownFor = key;
+			shownOrigin = null;
+			clearAudioSourceIndicator();
+		} else if (shownOrigin === null) return;
+		const term = await reviewableFromVocabSlug(slug);
+		if (!term || vocabSlugFromPath() !== slug) return;
+		await loadTermAudio(term, (origin) => {
+			if (vocabSlugFromPath() !== slug) return;
+			shownFor = key;
+			shownOrigin = origin;
+			paintCue(origin);
+		}, { ignoreExampleAudio: true });
+		if (vocabSlugFromPath() !== slug) return;
+		if (shownFor === key && shownOrigin === null) clearShown();
+		else if (shownOrigin !== null) paintCue(shownOrigin);
+	}
+	function paintCue(origin) {
+		syncAudioSourceIndicator({
+			origin,
+			afterSubmit: cueAfterReady || readQuizState().isPostAttempt
+		});
+	}
+	function clearShown() {
+		shownFor = null;
+		shownOrigin = null;
+		cueAfterReady = false;
+		clearAudioSourceIndicator();
 	}
 	function bunproSentenceIndex(sentences) {
 		const shownId = nativeSentenceId();
@@ -1752,13 +2056,26 @@ input.bb-correct-guess {
 			index: nextSentenceIndex(shown?.reviewKey === reviewKey ? shown.index : bunproSentenceIndex(sentences), sentences.length)
 		});
 	}
+	function findSiteHeaderActionLists() {
+		const lists = [];
+		for (const help of document.querySelectorAll("svg[data-name=\"HELP_OUTLINE\"]")) {
+			const list = help.closest("ul");
+			if (!(list instanceof HTMLElement)) continue;
+			if (!list.querySelector("svg[data-name=\"SEARCH\"]")) continue;
+			if (!lists.includes(list)) lists.push(list);
+		}
+		return lists;
+	}
+	function findSiteHeaderHelpItem(list) {
+		return list.querySelector("svg[data-name=\"HELP_OUTLINE\"]")?.closest("li") ?? null;
+	}
 	var TUNE_SHAPES = `<g fill="currentColor">
   <rect x="3" y="6" width="18" height="2" rx="1"/>
   <rect x="3" y="16" width="18" height="2" rx="1"/>
   <circle cx="9" cy="7" r="3.25"/>
   <circle cx="15" cy="17" r="3.25"/>
 </g>`;
-	var version = "0.6.1";
+	var version = "0.7.0";
 	var PANEL_ID = "bb-settings-panel";
 	var CARD_CLASS = "bb-panel-card relative z-1 flex flex-col overflow-hidden rounded-normal border border-rim bg-secondary-bg text-primary-fg shadow-normal";
 	var CLOSE_SHAPES = "<path d=\"M6 6 18 18M18 6 6 18\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\"/>";
@@ -1854,19 +2171,29 @@ input.bb-correct-guess {
 	var LAUNCHER_MARKER = "data-bb-launcher";
 	function mountSettingsLaunchers() {
 		_GM_registerMenuCommand("Settings", toggleSettingsPanel);
-		keepToolbarButtonMounted();
+		keepLaunchersMounted();
 	}
-	function keepToolbarButtonMounted() {
+	function keepLaunchersMounted() {
 		const mount = () => {
-			const toolbar = findQuizToolbar();
-			if (!toolbar || toolbar.querySelector(`[${LAUNCHER_MARKER}]`)) return;
-			toolbar.append(buildToolbarButton());
+			mountQuizToolbarButton();
+			mountSiteHeaderButtons();
 		};
-		new MutationObserver(mount).observe(document.body, {
-			childList: true,
-			subtree: true
-		});
+		watchBodyRemounts(mount);
 		mount();
+	}
+	function mountQuizToolbarButton() {
+		const toolbar = findQuizToolbar();
+		if (!toolbar || toolbar.querySelector(`[${LAUNCHER_MARKER}]`)) return;
+		toolbar.append(buildToolbarButton());
+	}
+	function mountSiteHeaderButtons() {
+		for (const list of findSiteHeaderActionLists()) {
+			if (list.querySelector(`[${LAUNCHER_MARKER}]`)) continue;
+			const item = buildToolbarButton();
+			const help = findSiteHeaderHelpItem(list);
+			if (help) help.before(item);
+			else list.append(item);
+		}
 	}
 	function buildToolbarButton() {
 		const icon = svgIcon("h-24 w-24", TUNE_SHAPES);
@@ -1900,10 +2227,7 @@ input.bb-correct-guess {
 			if (rows.length === 0) return;
 			article.append(buildBetterBunproGuideSection(rows));
 		};
-		new MutationObserver(mount).observe(document.body, {
-			childList: true,
-			subtree: true
-		});
+		watchBodyRemounts(mount);
 		mount();
 	}
 	function visibleRows() {

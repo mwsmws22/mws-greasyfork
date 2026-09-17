@@ -1,9 +1,10 @@
-import { findTermAudioControl } from '../bunpro/quiz-dom';
+import { findTermAudioControls } from '../bunpro/quiz-dom';
 import type { AudioOrigin } from './origin';
 import { isRealAudioOrigin, labelForOrigin } from './origin';
 
 const PLAY_TITLE_BACKUP = 'bbAudioTitle';
 const REAL_AUDIO_CLASS = 'bb-audio-real';
+const TTS_AUDIO_CLASS = 'bb-audio-tts';
 const DEFAULT_PLAY_TITLE = 'Open the audio player and play audio';
 /** Leftover from the short-lived inline chip; strip it if HMR left one behind. */
 const LEGACY_CHIP_ID = 'bb-audio-source';
@@ -17,30 +18,44 @@ export interface AudioSourceCue {
 /**
  * Play-button tooltip for the audio source. When the clip is a real recording
  * and the answer is already in, tint the control with Bunpro's primary accent.
+ * When only TTS will play, force primary fg so Details (accent by default) reads
+ * as untinted.
+ *
+ * Paints every on-screen term control — answer bar and Details pitch play —
+ * so a review page with both does not leave Details unlabeled.
  */
 export function syncAudioSourceIndicator(cue: AudioSourceCue): void {
   removeLegacyChip();
   const label = labelForOrigin(cue.origin);
-  const control = findTermAudioControl();
-  if (!control) {
+  const controls = findTermAudioControls();
+  if (controls.length === 0) {
     return;
   }
 
   const emphasize = cue.afterSubmit && isRealAudioOrigin(cue.origin);
-  if (control.title === label && control.classList.contains(REAL_AUDIO_CLASS) === emphasize) {
-    return;
-  }
+  const asTts = cue.afterSubmit && !isRealAudioOrigin(cue.origin);
 
-  rememberPlayTitle(control);
-  if (control.title !== label) {
-    control.title = label;
+  for (const control of controls) {
+    if (
+      control.title === label &&
+      control.classList.contains(REAL_AUDIO_CLASS) === emphasize &&
+      control.classList.contains(TTS_AUDIO_CLASS) === asTts
+    ) {
+      continue;
+    }
+
+    rememberPlayTitle(control);
+    if (control.title !== label) {
+      control.title = label;
+    }
+    control.classList.toggle(REAL_AUDIO_CLASS, emphasize);
+    control.classList.toggle(TTS_AUDIO_CLASS, asTts);
   }
-  control.classList.toggle(REAL_AUDIO_CLASS, emphasize);
 }
 
 export function clearAudioSourceIndicator(): void {
-  restorePlayTitle();
-  clearRealAudioClass();
+  restorePlayTitles();
+  clearAudioClasses();
   removeLegacyChip();
 }
 
@@ -50,21 +65,20 @@ function rememberPlayTitle(control: HTMLElement): void {
   }
 }
 
-function restorePlayTitle(): void {
-  const control = findTermAudioControl();
-  if (!control) {
-    return;
-  }
-  const original = control.dataset[PLAY_TITLE_BACKUP];
-  if (original !== undefined) {
-    control.title = original;
-    delete control.dataset[PLAY_TITLE_BACKUP];
+function restorePlayTitles(): void {
+  for (const control of findTermAudioControls()) {
+    const original = control.dataset[PLAY_TITLE_BACKUP];
+    if (original !== undefined) {
+      control.title = original;
+      delete control.dataset[PLAY_TITLE_BACKUP];
+    }
   }
 }
 
-function clearRealAudioClass(): void {
-  const control = findTermAudioControl();
-  control?.classList.remove(REAL_AUDIO_CLASS);
+function clearAudioClasses(): void {
+  for (const control of findTermAudioControls()) {
+    control.classList.remove(REAL_AUDIO_CLASS, TTS_AUDIO_CLASS);
+  }
 }
 
 function removeLegacyChip(): void {

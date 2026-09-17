@@ -215,10 +215,29 @@ export function findAnswerConsole(): HTMLElement | null {
 }
 
 /**
- * Bunpro's term-audio control at the left of the answer bar — play, pause, or
- * the close button once the player is open.
+ * Bunpro's term-audio controls — quiz answer bar and/or the Details
+ * pitch-accent play button. Both can be on screen after a review answer.
  */
+export function findTermAudioControls(): HTMLElement[] {
+  const controls: HTMLElement[] = [];
+  const answer = findAnswerBarAudioControl();
+  if (answer) {
+    controls.push(answer);
+  }
+  const details = findDetailsPitchPlay();
+  if (details && !controls.includes(details)) {
+    controls.push(details);
+  }
+  return controls;
+}
+
+/** First term-audio control (answer bar preferred). Prefer {@link findTermAudioControls}. */
 export function findTermAudioControl(): HTMLElement | null {
+  return findTermAudioControls()[0] ?? null;
+}
+
+/** Play / pause / close at the left of the typed-answer console. */
+export function findAnswerBarAudioControl(): HTMLElement | null {
   const answerConsole = findAnswerConsole();
   if (!answerConsole) {
     return null;
@@ -230,6 +249,13 @@ export function findTermAudioControl(): HTMLElement | null {
     }
   }
   return null;
+}
+
+/** Pitch-accent speaker in the vocabulary Details section. */
+export function findDetailsPitchPlay(): HTMLElement | null {
+  const root = document.querySelector('.DetailsPitchAccent');
+  const button = root?.querySelector('button:has(svg[data-name="PLAY_CIRCLE_FILLED"])');
+  return button instanceof HTMLElement ? button : null;
 }
 
 /** The typed-answer console; the wrong guess sits in here after grading. */

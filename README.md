@@ -70,8 +70,9 @@ Full Greasy Fork descriptions: `better-bunpro/greasyfork-additional-info.md`.
 
 **Settings:**
 
-Open the panel from the sliders icon in the quiz toolbar, next to Bunpro's own settings and styling
-icons, or from `Settings` in the Tampermonkey menu. Feature toggles persist via `GM_setValue`.
+Open the panel from the sliders icon in the site header (between Search and Help), in the quiz
+toolbar next to Bunpro's own settings and styling icons, or from `Settings` in the Tampermonkey
+menu. Feature toggles persist via `GM_setValue`.
 
 **How it works:**
 

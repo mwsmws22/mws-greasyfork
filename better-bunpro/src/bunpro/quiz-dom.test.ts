@@ -2,7 +2,10 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
   clearAnswerIfShowing,
+  findDetailsPitchPlay,
   findHotkeyGuideArticle,
+  findTermAudioControl,
+  findTermAudioControls,
   findUndoConfirmButton,
   showAnswerInput,
   undoGradedAnswer,
@@ -14,6 +17,40 @@ afterEach(() => {
   vi.useRealTimers();
   document.documentElement.className = '';
   document.body.innerHTML = '';
+});
+
+describe('findTermAudioControl', () => {
+  it('prefers the answer-bar control, then the Details pitch-accent play', () => {
+    document.body.innerHTML = `
+      <div class="DetailsPitchAccent">
+        <button id="details"><svg data-name="PLAY_CIRCLE_FILLED"></svg></button>
+      </div>
+    `;
+    expect(findDetailsPitchPlay()?.id).toBe('details');
+    expect(findTermAudioControl()?.id).toBe('details');
+
+    document.body.innerHTML = `
+      <div class="InputManual">
+        <button id="answer"><svg data-name="PLAY_CIRCLE_FILLED"></svg></button>
+      </div>
+      <div class="DetailsPitchAccent">
+        <button id="details"><svg data-name="PLAY_CIRCLE_FILLED"></svg></button>
+      </div>
+    `;
+    expect(findTermAudioControl()?.id).toBe('answer');
+  });
+
+  it('lists answer-bar and Details together when both are present', () => {
+    document.body.innerHTML = `
+      <div class="InputManual">
+        <button id="answer"><svg data-name="PLAY_CIRCLE_FILLED"></svg></button>
+      </div>
+      <div class="DetailsPitchAccent">
+        <button id="details"><svg data-name="PLAY_CIRCLE_FILLED"></svg></button>
+      </div>
+    `;
+    expect(findTermAudioControls().map((el) => el.id)).toEqual(['answer', 'details']);
+  });
 });
 
 describe('findUndoConfirmButton', () => {

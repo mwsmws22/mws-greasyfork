@@ -89,6 +89,13 @@ const CSS = `
 button.bb-audio-real {
   color: rgb(var(--c-primary-accent) / 1);
 }
+/**
+ * Details pitch-accent play is Bunpro-accent by default — force primary fg when
+ * only synthesised audio will play, so the tint means a real recording.
+ */
+button.bb-audio-tts {
+  color: rgb(var(--c-primary-fg) / 1);
+}
 html.bb-skipping-undo-modal .Modal,
 html.bb-skipping-undo-modal #tooltip-portal,
 html.bb-skipping-undo-modal .Toast {

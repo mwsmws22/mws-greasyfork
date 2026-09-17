@@ -1,5 +1,6 @@
 import { GM_registerMenuCommand } from '$';
 import { findQuizToolbar } from '../bunpro/quiz-dom';
+import { findSiteHeaderActionLists, findSiteHeaderHelpItem } from '../bunpro/site-dom';
 import { element, svgIcon } from '../dom';
 import { watchBodyRemounts } from '../dom/remount';
 import { TUNE_SHAPES } from '../ui/better-bunpro-icon';
@@ -9,21 +10,44 @@ const LAUNCHER_MARKER = 'data-bb-launcher';
 
 export function mountSettingsLaunchers(): void {
   GM_registerMenuCommand('Settings', toggleSettingsPanel);
-  keepToolbarButtonMounted();
+  keepLaunchersMounted();
 }
 
-/** The quiz toolbar is remounted as Bunpro navigates, so re-add ourselves each time. */
-function keepToolbarButtonMounted(): void {
+/**
+ * Quiz toolbar and site header remount as Bunpro navigates — re-add ourselves
+ * each time. Site header sits between Search and Help on every page.
+ */
+function keepLaunchersMounted(): void {
   const mount = () => {
-    const toolbar = findQuizToolbar();
-    if (!toolbar || toolbar.querySelector(`[${LAUNCHER_MARKER}]`)) {
-      return;
-    }
-    toolbar.append(buildToolbarButton());
+    mountQuizToolbarButton();
+    mountSiteHeaderButtons();
   };
 
   watchBodyRemounts(mount);
   mount();
+}
+
+function mountQuizToolbarButton(): void {
+  const toolbar = findQuizToolbar();
+  if (!toolbar || toolbar.querySelector(`[${LAUNCHER_MARKER}]`)) {
+    return;
+  }
+  toolbar.append(buildToolbarButton());
+}
+
+function mountSiteHeaderButtons(): void {
+  for (const list of findSiteHeaderActionLists()) {
+    if (list.querySelector(`[${LAUNCHER_MARKER}]`)) {
+      continue;
+    }
+    const item = buildToolbarButton();
+    const help = findSiteHeaderHelpItem(list);
+    if (help) {
+      help.before(item);
+    } else {
+      list.append(item);
+    }
+  }
 }
 
 function buildToolbarButton(): HTMLElement {
