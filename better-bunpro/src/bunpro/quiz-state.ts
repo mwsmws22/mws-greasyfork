@@ -1,3 +1,5 @@
+import { watchBodyRemounts } from '../dom/remount';
+
 /**
  * Bunpro mirrors its entire quiz state onto a hidden element as `data-meta-*`
  * attributes, so we read the state rather than infer it from the rendered DOM.
@@ -92,12 +94,11 @@ export function watchQuizState(onChange: (state: QuizState) => void): () => void
     emitIfChanged();
   };
 
-  const treeObserver = new MutationObserver(bindToMetadataElement);
-  treeObserver.observe(document.body, { childList: true, subtree: true });
+  const treeStop = watchBodyRemounts(bindToMetadataElement);
   bindToMetadataElement();
 
   return () => {
-    treeObserver.disconnect();
+    treeStop();
     attributeObserver?.disconnect();
   };
 }

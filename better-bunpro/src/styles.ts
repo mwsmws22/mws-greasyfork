@@ -82,6 +82,13 @@ const CSS = `
   margin: 0 auto;
   padding: 0 0.375rem 0.5rem;
 }
+/**
+ * Outweigh Bunpro's \`text-primary-fg\` on the answer-bar play control when a
+ * real recording (not TTS) will play after the answer is in.
+ */
+button.bb-audio-real {
+  color: rgb(var(--c-primary-accent) / 1);
+}
 html.bb-skipping-undo-modal .Modal,
 html.bb-skipping-undo-modal #tooltip-portal,
 html.bb-skipping-undo-modal .Toast {

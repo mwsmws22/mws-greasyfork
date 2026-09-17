@@ -17,7 +17,7 @@ afterEach(() => {
 
 describe('startReplacingAudio', () => {
   it('rewrites a synthesised URL to the recording when one is filed', () => {
-    remember([TTS], RECORDING);
+    remember([TTS], RECORDING, 'jpod101');
     startReplacingAudio();
 
     const audio = new Audio();
@@ -43,7 +43,7 @@ describe('startReplacingAudio', () => {
     startReplacingAudio();
     abandonPlaybackCaptureForTests();
     startReplacingAudio();
-    remember([TTS], RECORDING);
+    remember([TTS], RECORDING, 'jpod101');
 
     const audio = new Audio();
     audio.src = TTS;

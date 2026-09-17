@@ -1,3 +1,5 @@
+import { watchBodyRemounts } from '../dom/remount';
+
 /**
  * The quiz and the (optional) item-detail panel are both `<article>` elements
  * inside `#js-quiz`, so every selector here excludes the detail panel.
@@ -188,19 +190,18 @@ function hideUndoFeedback(): void {
 }
 
 function waitForUndoConfirm(): void {
-  const observer = new MutationObserver(() => {
+  const stop = watchBodyRemounts(() => {
     const confirm = findUndoConfirmButton();
     if (!confirm) {
       return;
     }
     window.clearTimeout(timeout);
-    observer.disconnect();
+    stop();
     confirm.click();
   });
   const timeout = window.setTimeout(() => {
-    observer.disconnect();
+    stop();
   }, UNDO_PROMPT_WAIT_MS);
-  observer.observe(document.body, { childList: true, subtree: true });
 }
 
 function showUndoFeedback(): void {
@@ -211,6 +212,24 @@ function showUndoFeedback(): void {
 /** The row around the field, which Bunpro outlines in red for a wrong answer. */
 export function findAnswerConsole(): HTMLElement | null {
   return document.querySelector<HTMLElement>('.InputManual');
+}
+
+/**
+ * Bunpro's term-audio control at the left of the answer bar — play, pause, or
+ * the close button once the player is open.
+ */
+export function findTermAudioControl(): HTMLElement | null {
+  const answerConsole = findAnswerConsole();
+  if (!answerConsole) {
+    return null;
+  }
+  for (const name of ['PLAY_CIRCLE_FILLED', 'PAUSE', 'CANCEL'] as const) {
+    const button = answerConsole.querySelector(`button:has(svg[data-name="${name}"])`);
+    if (button instanceof HTMLElement) {
+      return button;
+    }
+  }
+  return null;
 }
 
 /** The typed-answer console; the wrong guess sits in here after grading. */

@@ -6,6 +6,7 @@ import {
   findQuizArticle,
 } from '../bunpro/quiz-dom';
 import { element } from '../dom';
+import { watchRemounts } from '../dom/remount';
 import { buildSentenceCard, EXAMPLES_CARD, QUIZ_CARD } from './card';
 import { buildClozeStandIns } from './cloze-question';
 import { markAsOurs, paintStandIns, removeStandIns, type StandIn } from './stand-in';
@@ -29,7 +30,7 @@ interface MountedSentence extends ShownSentence {
 }
 
 let mounted: MountedSentence | null = null;
-let repaintObserver: MutationObserver | null = null;
+let stopRepaintWatch: (() => void) | null = null;
 
 export function shownSentence(): ShownSentence | null {
   return mounted;
@@ -53,8 +54,8 @@ export function showSentence(shown: ShownSentence): void {
 }
 
 export function clearSentence(): void {
-  repaintObserver?.disconnect();
-  repaintObserver = null;
+  stopRepaintWatch?.();
+  stopRepaintWatch = null;
   mounted = null;
   removeStandIns();
 }
@@ -95,10 +96,10 @@ function repaintWhenBunproRerenders(): void {
   if (!article) {
     return;
   }
-  repaintObserver = new MutationObserver(() => {
+  stopRepaintWatch?.();
+  stopRepaintWatch = watchRemounts(article, () => {
     if (mounted) {
       paintStandIns(mounted.standIns);
     }
   });
-  repaintObserver.observe(article, { childList: true, subtree: true });
 }

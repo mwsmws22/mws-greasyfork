@@ -34,6 +34,8 @@ After a typed answer is marked wrong, **Backspace** undoes it but also deletes t
 
 ### Play real speakers instead of TTS audio
 
-When Bunpro would play synthesised audio for a vocabulary term, this plays a recording of a person saying it instead, looked up the same way [Yomitan](https://github.com/yomidevs/yomitan) does (JapanesePod101, then Jisho). Sentence audio is left alone, and a term Bunpro already recorded is left alone. If nobody has recorded the word, the synthesised clip still plays.
+When Bunpro would play synthesised audio for a vocabulary term that has no example-sentence audio, this plays a recording of a person saying it instead, looked up the same way [Yomitan](https://github.com/yomidevs/yomitan) does (JapanesePod101, then Jisho). Example sentences that already have audio — even Bunpro TTS — are left alone, and a term Bunpro already recorded is left alone. If nobody has recorded the word, the synthesised clip still plays.
+
+After you answer, the play button is tinted when a real recording will play. Its tooltip names the source: **JPod101 Recording**, **Jisho Recording**, **Bunpro TTS**, or **Bunpro Recording**.
 
 Source: [github.com/mwsmws22/mws-greasyfork](https://github.com/mwsmws22/mws-greasyfork/tree/main/better-bunpro)

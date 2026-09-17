@@ -3,6 +3,7 @@ import { readQuizState, watchQuizState, type QuizState } from '../../bunpro/quiz
 import { reviewKey } from '../../bunpro/review';
 import { addUserSynonym } from '../../bunpro/synonyms';
 import { element } from '../../dom';
+import { watchBodyRemounts } from '../../dom/remount';
 import { injectStyles } from '../../styles';
 import { buildActionButton } from '../../ui/action-button';
 import { areKeystrokesClaimed, hasModifier } from '../../ui/keystrokes';
@@ -24,7 +25,7 @@ const PLUS_SHAPES =
   '<path d="M12 5v14M5 12h14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>';
 
 let stopWatchingQuiz: (() => void) | null = null;
-let remountObserver: MutationObserver | null = null;
+let stopWatchingRemounts: (() => void) | null = null;
 let standInQueuedFor: string | null = null;
 
 export const addSynonymFeature: Feature = {
@@ -41,8 +42,7 @@ export const addSynonymFeature: Feature = {
   start() {
     injectStyles();
     stopWatchingQuiz = watchQuizState(syncButton);
-    remountObserver = new MutationObserver(() => syncButton(readQuizState()));
-    remountObserver.observe(document.body, { childList: true, subtree: true });
+    stopWatchingRemounts = watchBodyRemounts(() => syncButton(readQuizState()));
     window.addEventListener('keydown', onKeyDown, true);
   },
 
@@ -50,8 +50,8 @@ export const addSynonymFeature: Feature = {
     window.removeEventListener('keydown', onKeyDown, true);
     stopWatchingQuiz?.();
     stopWatchingQuiz = null;
-    remountObserver?.disconnect();
-    remountObserver = null;
+    stopWatchingRemounts?.();
+    stopWatchingRemounts = null;
     removeButton();
     forgetPaintedGuess();
     standInQueuedFor = null;

@@ -1,4 +1,5 @@
 import type { Word } from './sources/source';
+import type { AudioOrigin } from './origin';
 
 /**
  * Bunpro asks for audio by URL, so a recording is filed under the synthesised
@@ -10,17 +11,30 @@ export interface SynthesisedAudio extends Word {
   ttsUrls: readonly string[];
 }
 
-/** Synthesised URL (decoded) to the recording that stands in for it. */
-const recordings = new Map<string, string>();
+interface RecordingEntry {
+  recording: string;
+  origin: AudioOrigin;
+}
 
-export function remember(ttsUrls: readonly string[], recording: string): void {
+/** Synthesised URL (decoded) to the recording that stands in for it. */
+const recordings = new Map<string, RecordingEntry>();
+
+export function remember(
+  ttsUrls: readonly string[],
+  recording: string,
+  origin: AudioOrigin,
+): void {
   for (const url of ttsUrls) {
-    recordings.set(canonicalAudioUrl(url), recording);
+    recordings.set(canonicalAudioUrl(url), { recording, origin });
   }
 }
 
 export function replacementFor(ttsUrl: string): string | null {
-  return recordings.get(canonicalAudioUrl(ttsUrl)) ?? null;
+  return recordings.get(canonicalAudioUrl(ttsUrl))?.recording ?? null;
+}
+
+export function originFor(ttsUrl: string): AudioOrigin | null {
+  return recordings.get(canonicalAudioUrl(ttsUrl))?.origin ?? null;
 }
 
 /** What the Audio element should actually load when Bunpro points it at `requested`. */

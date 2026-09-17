@@ -1,4 +1,5 @@
 import { findHotkeyGuideArticle } from '../bunpro/quiz-dom';
+import { watchBodyRemounts } from '../dom/remount';
 import { addSynonymFeature } from '../features/add-synonym/feature';
 import { editOnLeftFeature } from '../features/edit-on-left/feature';
 import { sentenceCycleFeature } from '../features/sentence-cycle/feature';
@@ -18,7 +19,7 @@ export function mountHotkeyGuide(): void {
     article.append(buildBetterBunproGuideSection(rows));
   };
 
-  new MutationObserver(mount).observe(document.body, { childList: true, subtree: true });
+  watchBodyRemounts(mount);
   mount();
 }
 

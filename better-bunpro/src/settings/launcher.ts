@@ -1,6 +1,7 @@
 import { GM_registerMenuCommand } from '$';
 import { findQuizToolbar } from '../bunpro/quiz-dom';
 import { element, svgIcon } from '../dom';
+import { watchBodyRemounts } from '../dom/remount';
 import { TUNE_SHAPES } from '../ui/better-bunpro-icon';
 import { toggleSettingsPanel } from './panel';
 
@@ -21,7 +22,7 @@ function keepToolbarButtonMounted(): void {
     toolbar.append(buildToolbarButton());
   };
 
-  new MutationObserver(mount).observe(document.body, { childList: true, subtree: true });
+  watchBodyRemounts(mount);
   mount();
 }
 
