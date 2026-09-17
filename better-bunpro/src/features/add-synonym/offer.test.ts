@@ -12,6 +12,7 @@ const wrongVocab: QuizState = {
   isPostAttempt: true,
   isRevealing: true,
   isCorrect: false,
+  isShowingInfo: false,
 };
 
 describe('shouldOfferSynonym', () => {

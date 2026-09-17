@@ -1,4 +1,4 @@
-import { findQuizArticle, findQuizConsole, showAnswerInput, undoGradedAnswer } from '../../bunpro/quiz-dom';
+import { clearAnswerIfShowing, findQuizArticle, findQuizConsole, showAnswerInput, undoGradedAnswer } from '../../bunpro/quiz-dom';
 import { readQuizState, watchQuizState, type QuizState } from '../../bunpro/quiz-state';
 import { reviewKey } from '../../bunpro/review';
 import { addUserSynonym } from '../../bunpro/synonyms';
@@ -11,6 +11,12 @@ import { markGuessCorrect } from '../keep-guessing/feedback';
 import { submitAcceptedStandIn } from '../keep-guessing/feature';
 import type { Feature } from '../registry';
 import { shouldOfferSynonym } from './offer';
+import {
+  forgetPaintedGuess,
+  paintedGuessFor,
+  rememberPaintedGuess,
+  takeStalePaintedGuess,
+} from './painted-guess';
 
 const SLOT_ID = 'bb-add-synonym';
 const SYNONYM_KEY = 's';
@@ -19,8 +25,6 @@ const PLUS_SHAPES =
 
 let stopWatchingQuiz: (() => void) | null = null;
 let remountObserver: MutationObserver | null = null;
-let addedFor: string | null = null;
-let addedGuess: string | null = null;
 let standInQueuedFor: string | null = null;
 
 export const addSynonymFeature: Feature = {
@@ -49,15 +53,19 @@ export const addSynonymFeature: Feature = {
     remountObserver?.disconnect();
     remountObserver = null;
     removeButton();
-    addedFor = null;
-    addedGuess = null;
+    forgetPaintedGuess();
     standInQueuedFor = null;
   },
 };
 
 function syncButton(state: QuizState): void {
   const review = reviewKey(state);
-  if (review !== null && addedFor === review) {
+  const staleGuess = takeStalePaintedGuess(review);
+  if (staleGuess !== null) {
+    clearAnswerIfShowing(staleGuess);
+    standInQueuedFor = null;
+  }
+  if (review !== null && paintedGuessFor(review) !== null) {
     followThroughAcceptedGuess(state, review);
   }
   if (!shouldOfferSynonym(state) || !findQuizArticle()) {
@@ -67,11 +75,11 @@ function syncButton(state: QuizState): void {
   if (document.getElementById(SLOT_ID)) {
     return;
   }
-  const console = findQuizConsole();
-  if (!console) {
+  const quizConsole = findQuizConsole();
+  if (!quizConsole) {
     return;
   }
-  console.before(buildSlot(state));
+  quizConsole.before(buildSlot(state));
 }
 
 /**
@@ -106,14 +114,15 @@ function buildSlot(state: QuizState): HTMLElement {
       failed: 'Could not add synonym',
     },
     icon: PLUS_SHAPES,
-    startAs: review !== null && addedFor === review ? 'done' : 'idle',
+    startAs: paintedGuessFor(review) !== null ? 'done' : 'idle',
     run: async () => {
       if (vocabId === undefined) {
         throw new Error('No vocab id on the current review');
       }
       const outcome = await addUserSynonym(vocabId, synonym);
-      addedFor = review;
-      addedGuess = synonym;
+      if (review !== null) {
+        rememberPaintedGuess(review, synonym);
+      }
       acceptAsCorrect(state, review, synonym);
       return outcome === 'already-there' ? 'Already a synonym' : undefined;
     },
@@ -142,7 +151,7 @@ function followThroughAcceptedGuess(state: QuizState, review: string): void {
     queueStandIn(review);
     return;
   }
-  showAddedGuess();
+  showAddedGuess(review);
 }
 
 function queueStandIn(review: string): void {
@@ -153,11 +162,12 @@ function queueStandIn(review: string): void {
   submitAcceptedStandIn(review);
 }
 
-function showAddedGuess(): void {
-  if (addedGuess === null) {
+function showAddedGuess(review: string): void {
+  const guess = paintedGuessFor(review);
+  if (guess === null) {
     return;
   }
-  showAnswerInput(addedGuess);
+  showAnswerInput(guess);
   markGuessCorrect();
 }
 

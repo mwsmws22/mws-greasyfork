@@ -12,6 +12,7 @@ const vocab: QuizState = {
   isPostAttempt: false,
   isRevealing: false,
   isCorrect: false,
+  isShowingInfo: false,
 };
 
 describe('termToPrefetch', () => {

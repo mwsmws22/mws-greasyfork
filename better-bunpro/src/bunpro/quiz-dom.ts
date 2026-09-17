@@ -74,18 +74,42 @@ export function fillAnswerInput(value: string): void {
   input.dispatchEvent(new Event('input', { bubbles: true }));
 }
 
+const PLACEHOLDER_BACKUP = 'bbPlaceholder';
+
 /**
  * After a graded answer React ignores input events, so this only paints the
- * field and its placeholder. The next question remounts the input anyway.
+ * field and its placeholder. The same box is reused for the next question,
+ * so `clearAnswerIfShowing` has to take the paint off when the quiz moves on.
  */
 export function showAnswerInput(value: string): void {
   const input = findAnswerInput();
   if (!input) {
     return;
   }
+  if (input.dataset[PLACEHOLDER_BACKUP] === undefined) {
+    input.dataset[PLACEHOLDER_BACKUP] = input.placeholder;
+  }
   input.placeholder = value;
   if (input.value !== value) {
     writeAnswerInput(input, value);
+  }
+}
+
+/** Undoes `showAnswerInput` if that text is still what the field is showing. */
+export function clearAnswerIfShowing(value: string): void {
+  const input = findAnswerInput();
+  if (!input) {
+    return;
+  }
+  if (input.placeholder === value) {
+    const original = input.dataset[PLACEHOLDER_BACKUP];
+    if (original !== undefined) {
+      input.placeholder = original;
+      delete input.dataset[PLACEHOLDER_BACKUP];
+    }
+  }
+  if (input.value === value) {
+    fillAnswerInput('');
   }
 }
 
@@ -128,17 +152,24 @@ export function findUndoConfirmButton(): HTMLElement | null {
   return actions.length > 0 ? (actions[actions.length - 1] ?? null) : null;
 }
 
+/** Whether the "answer undone" toast should stay on screen after we click Undo. */
+export type UndoFeedback = 'silent' | 'visible';
+
 /**
  * Retracts the last graded answer. If Bunpro asks to confirm, accept that
- * prompt without ticking "don't show again", and hide the "answer undone"
- * toast that would otherwise follow.
+ * prompt without ticking "don't show again". Silent undos also hide the
+ * "answer undone" toast; visible ones leave it, the same as Backspace.
  */
-export function undoGradedAnswer(): void {
+export function undoGradedAnswer(feedback: UndoFeedback = 'silent'): void {
   const undo = findUndoButton();
   if (!undo) {
     return;
   }
-  hideUndoFeedback();
+  if (feedback === 'silent') {
+    hideUndoFeedback();
+  } else {
+    showUndoFeedback();
+  }
   undo.click();
   const confirm = findUndoConfirmButton();
   if (confirm) {

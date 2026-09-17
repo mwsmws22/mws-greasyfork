@@ -1,6 +1,12 @@
 // @vitest-environment jsdom
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { findHotkeyGuideArticle, findUndoConfirmButton, undoGradedAnswer } from './quiz-dom';
+import {
+  clearAnswerIfShowing,
+  findHotkeyGuideArticle,
+  findUndoConfirmButton,
+  showAnswerInput,
+  undoGradedAnswer,
+} from './quiz-dom';
 
 const HIDE_CLASS = 'bb-skipping-undo-modal';
 
@@ -59,6 +65,40 @@ describe('undoGradedAnswer', () => {
 
     expect(undone()).toBe(true);
   });
+
+  it('leaves the undone toast visible when asked to, like Backspace', () => {
+    const undone = mountBareUndo();
+
+    undoGradedAnswer('visible');
+
+    expect(undone()).toBe(true);
+    expect(document.documentElement.classList.contains(HIDE_CLASS)).toBe(false);
+  });
+});
+
+describe('showAnswerInput / clearAnswerIfShowing', () => {
+  it('does not leave a painted synonym in the box once the next question is up', () => {
+    mountAnswerInput({ value: 'to flicker', placeholder: 'Your answer' });
+    showAnswerInput('test');
+
+    expect(inputValue()).toBe('test');
+    expect(inputPlaceholder()).toBe('test');
+
+    clearAnswerIfShowing('test');
+
+    expect(inputValue()).toBe('');
+    expect(inputPlaceholder()).toBe('Your answer');
+  });
+
+  it('leaves the box alone if the next question already has different text', () => {
+    mountAnswerInput({ value: 'test', placeholder: 'Your answer' });
+    showAnswerInput('test');
+    writeInputValue('flicker');
+
+    clearAnswerIfShowing('test');
+
+    expect(inputValue()).toBe('flicker');
+  });
 });
 
 describe('findHotkeyGuideArticle', () => {
@@ -82,6 +122,31 @@ describe('findHotkeyGuideArticle', () => {
     expect(findHotkeyGuideArticle()).toBeNull();
   });
 });
+
+function mountAnswerInput(opts: { value: string; placeholder: string }): void {
+  document.body.innerHTML = `<input id="js-manual-input" type="text" placeholder="${opts.placeholder}" />`;
+  const input = document.getElementById('js-manual-input');
+  if (input instanceof HTMLInputElement) {
+    input.value = opts.value;
+  }
+}
+
+function writeInputValue(value: string): void {
+  const input = document.getElementById('js-manual-input');
+  if (input instanceof HTMLInputElement) {
+    input.value = value;
+  }
+}
+
+function inputValue(): string {
+  const input = document.getElementById('js-manual-input');
+  return input instanceof HTMLInputElement ? input.value : '';
+}
+
+function inputPlaceholder(): string {
+  const input = document.getElementById('js-manual-input');
+  return input instanceof HTMLInputElement ? input.placeholder : '';
+}
 
 function undoWarningHtml(): string {
   return `

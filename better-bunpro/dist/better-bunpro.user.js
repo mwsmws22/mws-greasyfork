@@ -3,7 +3,7 @@
 // @namespace    mwsmws22
 // @version      0.5.0
 // @author       mwsmws22
-// @description  Features I wish Bunpro had. Show example sentences for A1+ vocab after a correct answer, cycle sentences with Tab, keep guessing after a wrong answer, add a missed translation as a synonym, play real speakers instead of synthesised term audio, and more.
+// @description  Features I wish Bunpro had. Show example sentences for A1+ vocab after a correct answer, cycle sentences with Tab, keep guessing after a wrong answer, add a missed translation as a synonym, edit a wrong answer with Left Arrow, play real speakers instead of synthesised term audio, and more.
 // @license      MIT
 // @match        https://bunpro.jp/*
 // @connect      assets.languagepod101.com
@@ -103,11 +103,25 @@
 		writeAnswerInput(input, value);
 		input.dispatchEvent(new Event("input", { bubbles: true }));
 	}
+	var PLACEHOLDER_BACKUP = "bbPlaceholder";
 	function showAnswerInput(value) {
 		const input = findAnswerInput();
 		if (!input) return;
+		if (input.dataset[PLACEHOLDER_BACKUP] === void 0) input.dataset[PLACEHOLDER_BACKUP] = input.placeholder;
 		input.placeholder = value;
 		if (input.value !== value) writeAnswerInput(input, value);
+	}
+	function clearAnswerIfShowing(value) {
+		const input = findAnswerInput();
+		if (!input) return;
+		if (input.placeholder === value) {
+			const original = input.dataset[PLACEHOLDER_BACKUP];
+			if (original !== void 0) {
+				input.placeholder = original;
+				delete input.dataset[PLACEHOLDER_BACKUP];
+			}
+		}
+		if (input.value === value) fillAnswerInput("");
 	}
 	function writeAnswerInput(input, value) {
 		(Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")?.set)?.call(input, value);
@@ -190,7 +204,8 @@
 		submittedAnswer: null,
 		isPostAttempt: false,
 		isRevealing: false,
-		isCorrect: false
+		isCorrect: false,
+		isShowingInfo: false
 	};
 	function readQuizState() {
 		const element = document.getElementById(METADATA_ID);
@@ -204,7 +219,8 @@
 			submittedAnswer: parseSubmitted(element.getAttribute("data-meta-input")),
 			isPostAttempt: element.getAttribute("data-meta-is-post-attempt") === "true",
 			isRevealing: element.getAttribute("data-meta-is-revealing") === "true",
-			isCorrect: element.getAttribute("data-meta-is-correct") === "true"
+			isCorrect: element.getAttribute("data-meta-is-correct") === "true",
+			isShowingInfo: element.getAttribute("data-meta-is-showing-info") === "true"
 		};
 	}
 	function watchQuizState(onChange) {
@@ -598,11 +614,11 @@ input.bb-correct-guess {
 			onEscape
 		};
 		claims.push(claim);
-		if (claims.length === 1) window.addEventListener("keydown", onKeyDown$3, true);
+		if (claims.length === 1) window.addEventListener("keydown", onKeyDown$4, true);
 		return () => {
 			const index = claims.indexOf(claim);
 			if (index !== -1) claims.splice(index, 1);
-			if (claims.length === 0) window.removeEventListener("keydown", onKeyDown$3, true);
+			if (claims.length === 0) window.removeEventListener("keydown", onKeyDown$4, true);
 		};
 	}
 	function areKeystrokesClaimed() {
@@ -611,7 +627,7 @@ input.bb-correct-guess {
 	function hasModifier(event) {
 		return event.altKey || event.ctrlKey || event.metaKey || event.shiftKey;
 	}
-	function onKeyDown$3(event) {
+	function onKeyDown$4(event) {
 		const newest = claims[claims.length - 1];
 		if (!newest) return;
 		if (event.key === "Escape") {
@@ -735,11 +751,11 @@ input.bb-correct-guess {
 		enabledByDefault: true,
 		start() {
 			injectStyles();
-			window.addEventListener("keydown", onKeyDown$2, true);
+			window.addEventListener("keydown", onKeyDown$3, true);
 			window.addEventListener("click", onClick, true);
 		},
 		stop() {
-			window.removeEventListener("keydown", onKeyDown$2, true);
+			window.removeEventListener("keydown", onKeyDown$3, true);
 			window.removeEventListener("click", onClick, true);
 			lastRejected = null;
 			if (officialSubmitTimer !== null) {
@@ -748,7 +764,7 @@ input.bb-correct-guess {
 			}
 		}
 	};
-	function onKeyDown$2(event) {
+	function onKeyDown$3(event) {
 		if (event.key !== SUBMIT_KEY || event.repeat || hasModifier(event) || areKeystrokesClaimed()) return;
 		swallowIfWrong(event);
 	}
@@ -818,13 +834,31 @@ input.bb-correct-guess {
 	function shouldOfferSynonym(state) {
 		return state.reviewable?.type === "vocab" && state.inputMode === "manual" && state.questionMode === "translate" && state.isPostAttempt && !state.isCorrect && synonymWorthAdding(state.submittedAnswer ?? "", state.answers);
 	}
+	var painted = null;
+	function rememberPaintedGuess(reviewKey, guess) {
+		painted = {
+			reviewKey,
+			guess
+		};
+	}
+	function paintedGuessFor(reviewKey) {
+		if (painted === null || reviewKey === null || painted.reviewKey !== reviewKey) return null;
+		return painted.guess;
+	}
+	function takeStalePaintedGuess(reviewKey) {
+		if (painted === null || reviewKey === null || painted.reviewKey === reviewKey) return null;
+		const guess = painted.guess;
+		painted = null;
+		return guess;
+	}
+	function forgetPaintedGuess() {
+		painted = null;
+	}
 	var SLOT_ID = "bb-add-synonym";
 	var SYNONYM_KEY = "s";
 	var PLUS_SHAPES = "<path d=\"M12 5v14M5 12h14\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\"/>";
-	var stopWatchingQuiz$3 = null;
+	var stopWatchingQuiz$4 = null;
 	var remountObserver = null;
-	var addedFor = null;
-	var addedGuess = null;
 	var standInQueuedFor = null;
 	var addSynonymFeature = {
 		id: "add-synonym",
@@ -833,39 +867,43 @@ input.bb-correct-guess {
 		enabledByDefault: true,
 		start() {
 			injectStyles();
-			stopWatchingQuiz$3 = watchQuizState(syncButton);
+			stopWatchingQuiz$4 = watchQuizState(syncButton);
 			remountObserver = new MutationObserver(() => syncButton(readQuizState()));
 			remountObserver.observe(document.body, {
 				childList: true,
 				subtree: true
 			});
-			window.addEventListener("keydown", onKeyDown$1, true);
+			window.addEventListener("keydown", onKeyDown$2, true);
 		},
 		stop() {
-			window.removeEventListener("keydown", onKeyDown$1, true);
-			stopWatchingQuiz$3?.();
-			stopWatchingQuiz$3 = null;
+			window.removeEventListener("keydown", onKeyDown$2, true);
+			stopWatchingQuiz$4?.();
+			stopWatchingQuiz$4 = null;
 			remountObserver?.disconnect();
 			remountObserver = null;
 			removeButton();
-			addedFor = null;
-			addedGuess = null;
+			forgetPaintedGuess();
 			standInQueuedFor = null;
 		}
 	};
 	function syncButton(state) {
 		const review = reviewKey(state);
-		if (review !== null && addedFor === review) followThroughAcceptedGuess(state, review);
+		const staleGuess = takeStalePaintedGuess(review);
+		if (staleGuess !== null) {
+			clearAnswerIfShowing(staleGuess);
+			standInQueuedFor = null;
+		}
+		if (review !== null && paintedGuessFor(review) !== null) followThroughAcceptedGuess(state, review);
 		if (!shouldOfferSynonym(state) || !findQuizArticle()) {
 			removeButton();
 			return;
 		}
 		if (document.getElementById(SLOT_ID)) return;
-		const console = findQuizConsole();
-		if (!console) return;
-		console.before(buildSlot(state));
+		const quizConsole = findQuizConsole();
+		if (!quizConsole) return;
+		quizConsole.before(buildSlot(state));
 	}
-	function onKeyDown$1(event) {
+	function onKeyDown$2(event) {
 		if (event.key !== SYNONYM_KEY || event.repeat || hasModifier(event) || areKeystrokesClaimed()) return;
 		const button = document.querySelector(`#${SLOT_ID} button`);
 		if (!button) return;
@@ -885,12 +923,11 @@ input.bb-correct-guess {
 				failed: "Could not add synonym"
 			},
 			icon: PLUS_SHAPES,
-			startAs: review !== null && addedFor === review ? "done" : "idle",
+			startAs: paintedGuessFor(review) !== null ? "done" : "idle",
 			run: async () => {
 				if (vocabId === void 0) throw new Error("No vocab id on the current review");
 				const outcome = await addUserSynonym(vocabId, synonym);
-				addedFor = review;
-				addedGuess = synonym;
+				if (review !== null) rememberPaintedGuess(review, synonym);
 				acceptAsCorrect(state, review, synonym);
 				return outcome === "already-there" ? "Already a synonym" : void 0;
 			}
@@ -914,20 +951,113 @@ input.bb-correct-guess {
 			queueStandIn(review);
 			return;
 		}
-		showAddedGuess();
+		showAddedGuess(review);
 	}
 	function queueStandIn(review) {
 		if (standInQueuedFor === review) return;
 		standInQueuedFor = review;
 		submitAcceptedStandIn(review);
 	}
-	function showAddedGuess() {
-		if (addedGuess === null) return;
-		showAnswerInput(addedGuess);
+	function showAddedGuess(review) {
+		const guess = paintedGuessFor(review);
+		if (guess === null) return;
+		showAnswerInput(guess);
 		markGuessCorrect();
 	}
 	function removeButton() {
 		document.getElementById(SLOT_ID)?.remove();
+	}
+	function shouldEnterEditOnLeft(state) {
+		return state.inputMode === "manual" && state.isPostAttempt && !state.isCorrect && !state.isShowingInfo;
+	}
+	function caretIndexAfterLefts(text, leftCount) {
+		return Math.max(0, text.length - leftCount);
+	}
+	function pendingRestoreAction(pendingReview, currentReview, isPostAttempt) {
+		if (pendingReview !== null && currentReview !== null && pendingReview !== currentReview) return "forget";
+		if (isPostAttempt || currentReview === null) return "wait";
+		return "apply";
+	}
+	function restoreWrongAnswer(text, leftCount) {
+		fillAnswerInput(text);
+		const input = findAnswerInput();
+		if (!input) return;
+		const caret = caretIndexAfterLefts(text, leftCount);
+		input.focus({ preventScroll: true });
+		input.setSelectionRange(caret, caret);
+	}
+	var EDIT_KEY = "ArrowLeft";
+	var stopWatchingQuiz$3 = null;
+	var pending = null;
+	var restoreTimer = null;
+	var editOnLeftFeature = {
+		id: "edit-on-left",
+		title: "Edit a wrong answer with Left Arrow",
+		description: "After a typed answer is marked wrong, Backspace undoes it but also deletes the last character. With this on, Left Arrow undoes without deleting: the full guess stays in the box and the caret moves left, so you can walk to a mistake in the middle and fix it.",
+		enabledByDefault: true,
+		start() {
+			injectStyles();
+			stopWatchingQuiz$3 = watchQuizState(onQuizStateChange$3);
+			window.addEventListener("keydown", onKeyDown$1, true);
+		},
+		stop() {
+			window.removeEventListener("keydown", onKeyDown$1, true);
+			stopWatchingQuiz$3?.();
+			stopWatchingQuiz$3 = null;
+			forgetPending();
+		}
+	};
+	function onKeyDown$1(event) {
+		if (event.key !== EDIT_KEY || hasModifier(event)) return;
+		if (pending) {
+			event.preventDefault();
+			event.stopPropagation();
+			pending.lefts += 1;
+			return;
+		}
+		if (event.repeat || areKeystrokesClaimed() || !findUndoButton()) return;
+		const state = readQuizState();
+		if (!shouldEnterEditOnLeft(state)) return;
+		event.preventDefault();
+		event.stopPropagation();
+		pending = {
+			review: reviewKey(state),
+			text: state.submittedAnswer ?? findAnswerInput()?.value ?? "",
+			lefts: 1
+		};
+		undoGradedAnswer();
+	}
+	function onQuizStateChange$3(state) {
+		if (!pending) return;
+		const action = pendingRestoreAction(pending.review, reviewKey(state), state.isPostAttempt);
+		if (action === "wait") return;
+		if (action === "forget") {
+			forgetPending();
+			return;
+		}
+		applyPendingRestore();
+		replayRestoreAfterReact(pending);
+	}
+	function applyPendingRestore() {
+		if (!pending) return;
+		restoreWrongAnswer(pending.text, pending.lefts);
+	}
+	function replayRestoreAfterReact(session) {
+		if (restoreTimer !== null) window.clearTimeout(restoreTimer);
+		restoreTimer = window.setTimeout(() => {
+			restoreTimer = null;
+			if (pending === session) {
+				applyPendingRestore();
+				pending = null;
+			}
+		}, 0);
+	}
+	function forgetPending() {
+		pending = null;
+		if (restoreTimer !== null) {
+			window.clearTimeout(restoreTimer);
+			restoreTimer = null;
+		}
 	}
 	var inFlight = new Map();
 	function fetchItem(reviewable) {
@@ -1772,6 +1902,10 @@ input.bb-correct-guess {
 			key: "Tab",
 			desc: "Cycle example sentences"
 		});
+		if (isFeatureEnabled(editOnLeftFeature)) rows.push({
+			key: "Left",
+			desc: "Edit wrong answer"
+		});
 		return rows;
 	}
 	registerFeature(exampleSentenceFeature);
@@ -1779,6 +1913,7 @@ input.bb-correct-guess {
 	registerFeature(keepGuessingFeature);
 	registerFeature(humanTermAudioFeature);
 	registerFeature(addSynonymFeature);
+	registerFeature(editOnLeftFeature);
 	mountSettingsLaunchers();
 	mountHotkeyGuide();
 	startEnabledFeatures();

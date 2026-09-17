@@ -1,5 +1,6 @@
 import { findHotkeyGuideArticle } from '../bunpro/quiz-dom';
 import { addSynonymFeature } from '../features/add-synonym/feature';
+import { editOnLeftFeature } from '../features/edit-on-left/feature';
 import { sentenceCycleFeature } from '../features/sentence-cycle/feature';
 import { isFeatureEnabled } from '../features/registry';
 import { buildBetterBunproGuideSection, HOTKEY_GUIDE_SECTION_ID, type HotkeyGuideRow } from './hotkey-guide';
@@ -28,6 +29,9 @@ function visibleRows(): HotkeyGuideRow[] {
   }
   if (isFeatureEnabled(sentenceCycleFeature)) {
     rows.push({ key: 'Tab', desc: 'Cycle example sentences' });
+  }
+  if (isFeatureEnabled(editOnLeftFeature)) {
+    rows.push({ key: 'Left', desc: 'Edit wrong answer' });
   }
   return rows;
 }

@@ -26,6 +26,8 @@ export interface QuizState {
   isPostAttempt: boolean;
   isRevealing: boolean;
   isCorrect: boolean;
+  /** More Info is open; Bunpro uses Left/Right to switch its tabs. */
+  isShowingInfo: boolean;
 }
 
 const NO_QUIZ: QuizState = {
@@ -38,6 +40,7 @@ const NO_QUIZ: QuizState = {
   isPostAttempt: false,
   isRevealing: false,
   isCorrect: false,
+  isShowingInfo: false,
 };
 
 export function readQuizState(): QuizState {
@@ -55,6 +58,7 @@ export function readQuizState(): QuizState {
     isPostAttempt: element.getAttribute('data-meta-is-post-attempt') === 'true',
     isRevealing: element.getAttribute('data-meta-is-revealing') === 'true',
     isCorrect: element.getAttribute('data-meta-is-correct') === 'true',
+    isShowingInfo: element.getAttribute('data-meta-is-showing-info') === 'true',
   };
 }
 
