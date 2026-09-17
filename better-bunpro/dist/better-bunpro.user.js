@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Better Bunpro
 // @namespace    mwsmws22
-// @version      0.6.0
+// @version      0.6.1
 // @author       mwsmws22
 // @description  Features I wish Bunpro had. Show example sentences for A1+ vocab after a correct answer, cycle sentences with Tab, keep guessing after a wrong answer, add a missed translation as a synonym, edit a wrong answer with Left Arrow, play real speakers instead of synthesised term audio, and more.
 // @license      MIT
@@ -1587,44 +1587,57 @@ input.bb-correct-guess {
 			warnOnce("term-audio", "Could not replace synthesised term audio:", error);
 		}
 	}
-	var nativeSrc = null;
-	var nativePlay = null;
+	var NATIVES_KEY = Symbol.for("better-bunpro.mediaNatives");
+	var installed = false;
 	function startReplacingAudio() {
-		if (nativeSrc) return;
-		const src = Object.getOwnPropertyDescriptor(HTMLMediaElement.prototype, "src");
-		if (!src?.get || !src.set) throw new Error("HTMLMediaElement.src is not configurable; term audio cannot be replaced");
-		nativeSrc = {
-			get: src.get,
-			set: src.set
-		};
-		nativePlay = HTMLMediaElement.prototype.play;
+		const natives = mediaNatives();
 		Object.defineProperty(HTMLMediaElement.prototype, "src", {
 			configurable: true,
 			enumerable: true,
 			get() {
-				return nativeSrc?.get.call(this) ?? "";
+				return natives.src.get.call(this);
 			},
 			set(url) {
-				nativeSrc?.set.call(this, urlToPlay(url));
+				natives.src.set.call(this, urlToPlay(url));
 			}
 		});
 		HTMLMediaElement.prototype.play = function playReplaced() {
 			const replacement = replacementFor(this.src);
 			if (replacement !== null && this.src !== replacement) this.src = replacement;
-			return nativePlay?.call(this) ?? Promise.resolve();
+			return natives.play.call(this);
 		};
+		installed = true;
 	}
 	function stopReplacingAudio() {
-		if (!nativeSrc || !nativePlay) return;
+		if (!installed) return;
+		const natives = mediaNatives();
 		Object.defineProperty(HTMLMediaElement.prototype, "src", {
 			configurable: true,
 			enumerable: true,
-			get: nativeSrc.get,
-			set: nativeSrc.set
+			get: natives.src.get,
+			set: natives.src.set
 		});
-		HTMLMediaElement.prototype.play = nativePlay;
-		nativeSrc = null;
-		nativePlay = null;
+		HTMLMediaElement.prototype.play = natives.play;
+		installed = false;
+	}
+	function mediaNatives() {
+		const globalStore = globalThis;
+		const saved = globalStore[NATIVES_KEY];
+		if (saved) return saved;
+		const src = Object.getOwnPropertyDescriptor(HTMLMediaElement.prototype, "src");
+		if (!src?.get || !src.set) throw new Error("HTMLMediaElement.src is not configurable; term audio cannot be replaced");
+		const natives = {
+			src: {
+				get: src.get,
+				set: src.set
+			},
+			play: HTMLMediaElement.prototype.play
+		};
+		Object.defineProperty(globalStore, NATIVES_KEY, {
+			configurable: true,
+			value: natives
+		});
+		return natives;
 	}
 	var stopWatchingQuiz$1 = null;
 	var humanTermAudioFeature = {
@@ -1745,7 +1758,7 @@ input.bb-correct-guess {
   <circle cx="9" cy="7" r="3.25"/>
   <circle cx="15" cy="17" r="3.25"/>
 </g>`;
-	var version = "0.6.0";
+	var version = "0.6.1";
 	var PANEL_ID = "bb-settings-panel";
 	var CARD_CLASS = "bb-panel-card relative z-1 flex flex-col overflow-hidden rounded-normal border border-rim bg-secondary-bg text-primary-fg shadow-normal";
 	var CLOSE_SHAPES = "<path d=\"M6 6 18 18M18 6 6 18\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\"/>";

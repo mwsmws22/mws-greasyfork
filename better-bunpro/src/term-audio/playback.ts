@@ -1,10 +1,21 @@
 import { replacementFor, urlToPlay } from './store';
 
-let nativeSrc: {
-  get: (this: HTMLMediaElement) => string;
-  set: (this: HTMLMediaElement, url: string) => void;
-} | null = null;
-let nativePlay: typeof HTMLMediaElement.prototype.play | null = null;
+/**
+ * True browser natives, kept on globalThis so a Vite HMR remount of this module
+ * does not re-read our own wrappers off the prototype and nest them. Nesting
+ * makes every `audio.src = …` recurse until nothing plays — TTS or recording.
+ */
+const NATIVES_KEY = Symbol.for('better-bunpro.mediaNatives');
+
+interface MediaNatives {
+  src: {
+    get: (this: HTMLMediaElement) => string;
+    set: (this: HTMLMediaElement, url: string) => void;
+  };
+  play: typeof HTMLMediaElement.prototype.play;
+}
+
+let installed = false;
 
 /**
  * Bunpro plays term audio on a detached `Audio` element, so there is nothing in
@@ -12,25 +23,15 @@ let nativePlay: typeof HTMLMediaElement.prototype.play | null = null;
  * Bunpro points that element at a synthesised clip, it loads the recording.
  */
 export function startReplacingAudio(): void {
-  if (nativeSrc) {
-    return;
-  }
-
-  const src = Object.getOwnPropertyDescriptor(HTMLMediaElement.prototype, 'src');
-  if (!src?.get || !src.set) {
-    throw new Error('HTMLMediaElement.src is not configurable; term audio cannot be replaced');
-  }
-  nativeSrc = { get: src.get, set: src.set };
-  nativePlay = HTMLMediaElement.prototype.play;
-
+  const natives = mediaNatives();
   Object.defineProperty(HTMLMediaElement.prototype, 'src', {
     configurable: true,
     enumerable: true,
     get() {
-      return nativeSrc?.get.call(this) ?? '';
+      return natives.src.get.call(this);
     },
     set(url: string) {
-      nativeSrc?.set.call(this, urlToPlay(url));
+      natives.src.set.call(this, urlToPlay(url));
     },
   });
 
@@ -39,21 +40,51 @@ export function startReplacingAudio(): void {
     if (replacement !== null && this.src !== replacement) {
       this.src = replacement;
     }
-    return nativePlay?.call(this) ?? Promise.resolve();
+    return natives.play.call(this);
   };
+
+  installed = true;
 }
 
 export function stopReplacingAudio(): void {
-  if (!nativeSrc || !nativePlay) {
+  if (!installed) {
     return;
   }
+  const natives = mediaNatives();
   Object.defineProperty(HTMLMediaElement.prototype, 'src', {
     configurable: true,
     enumerable: true,
-    get: nativeSrc.get,
-    set: nativeSrc.set,
+    get: natives.src.get,
+    set: natives.src.set,
   });
-  HTMLMediaElement.prototype.play = nativePlay;
-  nativeSrc = null;
-  nativePlay = null;
+  HTMLMediaElement.prototype.play = natives.play;
+  installed = false;
+}
+
+/** Simulates a hot-reload: module locals are gone, the patched prototype remains. */
+export function abandonPlaybackCaptureForTests(): void {
+  installed = false;
+}
+
+function mediaNatives(): MediaNatives {
+  const globalStore = globalThis as typeof globalThis & { [NATIVES_KEY]?: MediaNatives };
+  const saved = globalStore[NATIVES_KEY];
+  if (saved) {
+    return saved;
+  }
+
+  const src = Object.getOwnPropertyDescriptor(HTMLMediaElement.prototype, 'src');
+  if (!src?.get || !src.set) {
+    throw new Error('HTMLMediaElement.src is not configurable; term audio cannot be replaced');
+  }
+
+  const natives: MediaNatives = {
+    src: { get: src.get, set: src.set },
+    play: HTMLMediaElement.prototype.play,
+  };
+  Object.defineProperty(globalStore, NATIVES_KEY, {
+    configurable: true,
+    value: natives,
+  });
+  return natives;
 }
