@@ -1,6 +1,7 @@
 import { findNativeSentenceCard, findQuizArticle } from '../bunpro/quiz-dom';
 import type { StudyQuestion } from '../bunpro/api';
 import { shownSentence } from '../quiz-sentence/slot';
+import { bunproClipOrigin, type AudioOrigin } from './origin';
 
 /**
  * Sentence-example speakers use this title. Term controls do not:
@@ -99,4 +100,18 @@ function isVisiblyDisplayed(el: HTMLElement): boolean {
   }
   const style = getComputedStyle(el);
   return style.visibility !== 'hidden' && style.display !== 'none';
+}
+
+/** Origins for Info Examples list play buttons, keyed by study-question id. */
+export function exampleOriginsFromSentences(
+  sentences: readonly StudyQuestion[],
+): Map<number, AudioOrigin> {
+  const origins = new Map<number, AudioOrigin>();
+  for (const sentence of sentences) {
+    const origin = bunproClipOrigin(sentence.female_audio_url ?? sentence.male_audio_url);
+    if (origin) {
+      origins.set(sentence.id, origin);
+    }
+  }
+  return origins;
 }

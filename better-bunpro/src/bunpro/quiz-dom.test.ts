@@ -3,6 +3,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
   clearAnswerIfShowing,
   findDetailsPitchPlay,
+  findExamplesListPlayControls,
   findHotkeyGuideArticle,
   findTermAudioControl,
   findTermAudioControls,
@@ -17,6 +18,37 @@ afterEach(() => {
   vi.useRealTimers();
   document.documentElement.className = '';
   document.body.innerHTML = '';
+});
+
+describe('findExamplesListPlayControls', () => {
+  it('finds Info Examples speakers and ignores the quiz sentence card', () => {
+    document.body.innerHTML = `
+      <div id="js-quiz">
+        <article>
+          <section>
+            <aside id="study-question-1">
+              <button id="quiz-sentence" title="Play audio"></button>
+            </aside>
+          </section>
+        </article>
+        <article class="bp-reviewable-root">
+          <li id="study-question-10">
+            <button id="ex-a" title="Play audio"></button>
+            <button id="ex-a-mobile" title="Play audio"></button>
+          </li>
+          <li id="study-question-11">
+            <button id="ex-b" title="Play audio"></button>
+          </li>
+        </article>
+      </div>
+    `;
+
+    expect(findExamplesListPlayControls().map((el) => el.id)).toEqual([
+      'ex-a',
+      'ex-a-mobile',
+      'ex-b',
+    ]);
+  });
 });
 
 describe('findTermAudioControl', () => {

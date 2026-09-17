@@ -128,6 +128,36 @@ describe('syncAudioSourceIndicator', () => {
     expect(play?.classList.contains('bb-audio-real')).toBe(false);
   });
 
+  it('tints Info Examples speakers from each study-question origin', () => {
+    document.body.innerHTML = `
+      <article class="bp-reviewable-root">
+        <li id="study-question-10">
+          <button id="tts" class="text-primary-accent" title="Play audio"></button>
+        </li>
+        <li id="study-question-11">
+          <button id="rec" class="text-primary-accent" title="Play audio"></button>
+        </li>
+      </article>
+    `;
+
+    syncAudioSourceIndicator({
+      afterSubmit: true,
+      exampleOrigins: new Map([
+        [10, 'bunpro-tts'],
+        [11, 'bunpro-rec'],
+      ]),
+    });
+
+    const tts = document.getElementById('tts');
+    const rec = document.getElementById('rec');
+    expect(tts?.getAttribute('title')).toBe('Bunpro TTS');
+    expect(tts?.classList.contains('bb-audio-tts')).toBe(true);
+    expect(tts?.classList.contains('bb-audio-real')).toBe(false);
+    expect(rec?.getAttribute('title')).toBe('Bunpro Recording');
+    expect(rec?.classList.contains('bb-audio-real')).toBe(true);
+    expect(rec?.classList.contains('bb-audio-tts')).toBe(false);
+  });
+
   it('does not keep mutating when a body observer re-syncs after its own write', async () => {
     document.body.innerHTML = `
       <div class="InputManual">

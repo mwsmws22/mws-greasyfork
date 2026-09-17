@@ -2,7 +2,7 @@
 import { afterEach, describe, expect, it } from 'vitest';
 import { showSentence, clearSentence } from '../quiz-sentence/slot';
 import type { StudyQuestion } from '../bunpro/api';
-import { exampleOnScreenHasAudio } from './example-audio';
+import { exampleOnScreenHasAudio, exampleOriginsFromSentences } from './example-audio';
 
 const WITH_AUDIO: StudyQuestion = {
   id: 1,
@@ -128,5 +128,35 @@ describe('exampleOnScreenHasAudio', () => {
       </div>
     `;
     expect(exampleOnScreenHasAudio()).toBe(false);
+  });
+});
+
+describe('exampleOriginsFromSentences', () => {
+  it('maps each study question to Bunpro TTS or Bunpro Recording from its clip URL', () => {
+    const origins = exampleOriginsFromSentences([
+      {
+        ...WITH_AUDIO,
+        id: 10,
+        male_audio_url: 'https://cdn.example/audio/vocab/tts/sentence-male.mp3',
+      },
+      {
+        ...WITH_AUDIO,
+        id: 11,
+        male_audio_url: 'https://cdn.example/audio/vocab/human/sentence-male.mp3',
+      },
+      {
+        ...WITH_AUDIO,
+        id: 12,
+        male_audio_url: null,
+        female_audio_url: 'https://cdn.example/audio/grammar/n1/すら.mp3',
+      },
+      WITHOUT_AUDIO,
+    ]);
+
+    expect([...origins.entries()]).toEqual([
+      [10, 'bunpro-tts'],
+      [11, 'bunpro-rec'],
+      [12, 'bunpro-rec'],
+    ]);
   });
 });

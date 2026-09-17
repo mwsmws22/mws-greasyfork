@@ -258,6 +258,37 @@ export function findDetailsPitchPlay(): HTMLElement | null {
   return button instanceof HTMLElement ? button : null;
 }
 
+/**
+ * Play buttons on Info / vocabulary-page Examples list cards.
+ * Scoped to `.bp-reviewable-root` so the quiz's on-screen sentence card is left alone.
+ */
+export function findExamplesListPlayControls(): HTMLElement[] {
+  const root = document.querySelector('.bp-reviewable-root');
+  if (!root) {
+    return [];
+  }
+  const controls: HTMLElement[] = [];
+  for (const card of root.querySelectorAll(`[id^="${NATIVE_CARD_ID_PREFIX}"]`)) {
+    for (const button of card.querySelectorAll('button[title="Play audio"]')) {
+      if (button instanceof HTMLElement) {
+        controls.push(button);
+      }
+    }
+  }
+  return controls;
+}
+
+/** Study-question id from an Examples list play button's card, or null. */
+export function studyQuestionIdOfPlayControl(control: HTMLElement): number | null {
+  const card = control.closest(`[id^="${NATIVE_CARD_ID_PREFIX}"]`);
+  if (!(card instanceof HTMLElement)) {
+    return null;
+  }
+  const raw = card.id.slice(NATIVE_CARD_ID_PREFIX.length);
+  const id = Number(raw);
+  return Number.isFinite(id) ? id : null;
+}
+
 /** The typed-answer console; the wrong guess sits in here after grading. */
 export function findQuizConsole(): HTMLElement | null {
   return document.querySelector<HTMLElement>(`${QUIZ_ARTICLE} .bp-quiz-console`);

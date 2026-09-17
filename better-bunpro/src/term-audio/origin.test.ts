@@ -1,5 +1,11 @@
 import { describe, expect, it } from 'vitest';
-import { bunproOrigin, isRealAudioOrigin, labelForOrigin, originFromSourceName } from './origin';
+import {
+  bunproClipOrigin,
+  bunproOrigin,
+  isRealAudioOrigin,
+  labelForOrigin,
+  originFromSourceName,
+} from './origin';
 
 describe('labelForOrigin', () => {
   it('names recordings explicitly on the play-button tooltip', () => {
@@ -31,5 +37,24 @@ describe('bunproOrigin', () => {
   it('distinguishes synthesised clips from Bunpro\'s own recordings', () => {
     expect(bunproOrigin(true)).toBe('bunpro-tts');
     expect(bunproOrigin(false)).toBe('bunpro-rec');
+  });
+});
+
+describe('bunproClipOrigin', () => {
+  it('treats /audio/vocab/tts/ URLs as Bunpro TTS and other Bunpro clips as recordings', () => {
+    expect(
+      bunproClipOrigin(
+        'https://cdn.example/audio/vocab/tts/この樽にはお酒が入っています。-male.mp3',
+      ),
+    ).toBe('bunpro-tts');
+    expect(
+      bunproClipOrigin('https://cdn.example/audio/vocab/pronunciation/樽-male.mp3'),
+    ).toBe('bunpro-rec');
+    expect(
+      bunproClipOrigin(
+        'https://cdn.example/audio/grammar/n1/子供ですら知っている.mp3',
+      ),
+    ).toBe('bunpro-rec');
+    expect(bunproClipOrigin(null)).toBeNull();
   });
 });

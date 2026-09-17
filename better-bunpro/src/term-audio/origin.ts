@@ -32,3 +32,14 @@ export function originFromSourceName(name: string): AudioOrigin {
 export function bunproOrigin(hasTtsAudio: boolean): AudioOrigin {
   return hasTtsAudio ? 'bunpro-tts' : 'bunpro-rec';
 }
+
+/**
+ * Bunpro sentence clips: synthesised under `/audio/vocab/tts/`, otherwise a
+ * human recording (vocab pronunciation, grammar `/audio/grammar/…`, etc.).
+ */
+export function bunproClipOrigin(url: string | null | undefined): AudioOrigin | null {
+  if (!url) {
+    return null;
+  }
+  return url.includes('/audio/vocab/tts/') ? 'bunpro-tts' : 'bunpro-rec';
+}

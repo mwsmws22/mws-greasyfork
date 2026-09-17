@@ -1,7 +1,10 @@
+import { fetchStudyQuestions } from '../../bunpro/api';
 import { readQuizState, watchQuizState, type QuizState } from '../../bunpro/quiz-state';
 import { reviewKey } from '../../bunpro/review';
 import { watchBodyRemounts } from '../../dom/remount';
 import { injectStyles } from '../../styles';
+import { exampleOriginsFromSentences } from '../../term-audio/example-audio';
+import { grammarSlugFromPath, reviewableFromGrammarSlug } from '../../term-audio/grammar-page';
 import { clearAudioSourceIndicator, syncAudioSourceIndicator } from '../../term-audio/indicator';
 import { loadTermAudio } from '../../term-audio/load';
 import type { AudioOrigin } from '../../term-audio/origin';
@@ -15,7 +18,8 @@ let stopWatchingRemounts: (() => void) | null = null;
 let shownFor: string | null = null;
 let shownAnswerOrigin: AudioOrigin | null = null;
 let shownDetailsOrigin: AudioOrigin | null = null;
-/** Details pages tint as soon as a real recording is ready — no answer step. */
+let shownExampleOrigins: Map<number, AudioOrigin> | null = null;
+/** Details / grammar pages tint as soon as origins are ready — no answer step. */
 let cueAfterReady = false;
 
 export const humanTermAudioFeature: Feature = {
@@ -26,8 +30,9 @@ export const humanTermAudioFeature: Feature = {
     'person saying it instead (JapanesePod101, then Jisho). The Details pitch-accent control ' +
     'is always term audio and always looked up. The quiz answer-bar stays on Bunpro only when ' +
     'an on-screen example sentence already has its own clip; otherwise it follows the term ' +
-    'recording too. After you answer (or always on a Details page), each play button is tinted ' +
-    'when a real recording will play, and its tooltip names the source.',
+    'recording too. After you answer (or always on a Details / grammar page), each play button ' +
+    'is tinted when a real recording will play, and its tooltip names the source — including ' +
+    'Examples list speakers in Info.',
   enabledByDefault: true,
 
   start() {
@@ -36,21 +41,18 @@ export const humanTermAudioFeature: Feature = {
     stopWatchingQuiz = watchQuizState(onQuizStateChange);
     stopWatchingRemounts = watchBodyRemounts(() => {
       const state = readQuizState();
-      if (state.reviewable?.type === 'vocab') {
-        const review = reviewKey(state);
-        if (review !== null) {
-          // Sentence speaker often mounts after the first lookup — re-run so the
-          // answer bar can stay on Bunpro when the example has audio.
-          void refreshOrigin(state.reviewable, review);
-          return;
-        }
+      if (state.reviewable && reviewKey(state) !== null) {
+        void refreshReview(state);
+        return;
       }
-      if (shownAnswerOrigin !== null || shownDetailsOrigin !== null) {
+      if (
+        shownAnswerOrigin !== null ||
+        shownDetailsOrigin !== null ||
+        shownExampleOrigins !== null
+      ) {
         paintCues();
       }
-      if (state.reviewable?.type !== 'vocab') {
-        void refreshVocabPage();
-      }
+      void refreshItemPage();
     });
   },
 
@@ -65,29 +67,42 @@ export const humanTermAudioFeature: Feature = {
     shownFor = null;
     shownAnswerOrigin = null;
     shownDetailsOrigin = null;
+    shownExampleOrigins = null;
     cueAfterReady = false;
   },
 };
 
 function onQuizStateChange(state: QuizState): void {
-  const review = reviewKey(state);
-  if (state.reviewable?.type === 'vocab' && review !== null) {
-    void refreshOrigin(state.reviewable, review);
+  if (state.reviewable && reviewKey(state) !== null) {
+    void refreshReview(state);
     return;
   }
-  void refreshVocabPage();
+  void refreshItemPage();
 }
 
-async function refreshOrigin(
-  term: NonNullable<QuizState['reviewable']>,
-  review: string,
-): Promise<void> {
+async function refreshReview(state: QuizState): Promise<void> {
+  const term = state.reviewable;
+  const review = reviewKey(state);
+  if (!term || review === null) {
+    return;
+  }
+
   cueAfterReady = false;
   if (shownFor !== review) {
     shownFor = review;
     shownAnswerOrigin = null;
     shownDetailsOrigin = null;
+    shownExampleOrigins = null;
     clearAudioSourceIndicator();
+  }
+
+  void loadExampleOrigins(term, () => reviewKey(readQuizState()) === review);
+
+  if (term.type !== 'vocab') {
+    if (shownExampleOrigins !== null) {
+      paintCues();
+    }
+    return;
   }
 
   await loadTermAudio(term, (origins) => {
@@ -103,22 +118,39 @@ async function refreshOrigin(
   if (reviewKey(readQuizState()) !== review) {
     return;
   }
-  if (shownFor === review && shownAnswerOrigin === null && shownDetailsOrigin === null) {
+  if (
+    shownFor === review &&
+    shownAnswerOrigin === null &&
+    shownDetailsOrigin === null &&
+    shownExampleOrigins === null
+  ) {
     clearShown();
-  } else if (shownAnswerOrigin !== null || shownDetailsOrigin !== null) {
+  } else if (
+    shownAnswerOrigin !== null ||
+    shownDetailsOrigin !== null ||
+    shownExampleOrigins !== null
+  ) {
     paintCues();
   }
 }
 
-/** Vocabulary detail pages: always rewrite Details pitch-accent TTS. */
-async function refreshVocabPage(): Promise<void> {
-  const slug = vocabSlugFromPath();
-  if (!slug) {
-    clearShown();
+/** Vocabulary / grammar detail pages: cue Examples (and vocab Details pitch) immediately. */
+async function refreshItemPage(): Promise<void> {
+  const vocabSlug = vocabSlugFromPath();
+  if (vocabSlug) {
+    await refreshVocabPage(vocabSlug);
     return;
   }
+  const grammarSlug = grammarSlugFromPath();
+  if (grammarSlug) {
+    await refreshGrammarPage(grammarSlug);
+    return;
+  }
+  clearShown();
+}
 
-  const key = `page:${slug}`;
+async function refreshVocabPage(slug: string): Promise<void> {
+  const key = `page:vocab:${slug}`;
   cueAfterReady = true;
   if (shownFor === key && shownDetailsOrigin !== null) {
     paintCues();
@@ -128,6 +160,7 @@ async function refreshVocabPage(): Promise<void> {
     shownFor = key;
     shownAnswerOrigin = null;
     shownDetailsOrigin = null;
+    shownExampleOrigins = null;
     clearAudioSourceIndicator();
   } else if (shownDetailsOrigin === null) {
     return;
@@ -137,6 +170,8 @@ async function refreshVocabPage(): Promise<void> {
   if (!term || vocabSlugFromPath() !== slug) {
     return;
   }
+
+  void loadExampleOrigins(term, () => vocabSlugFromPath() === slug);
 
   await loadTermAudio(
     term,
@@ -155,10 +190,58 @@ async function refreshVocabPage(): Promise<void> {
   if (vocabSlugFromPath() !== slug) {
     return;
   }
-  if (shownFor === key && shownDetailsOrigin === null) {
+  if (shownFor === key && shownDetailsOrigin === null && shownExampleOrigins === null) {
     clearShown();
-  } else if (shownDetailsOrigin !== null) {
+  } else if (shownDetailsOrigin !== null || shownExampleOrigins !== null) {
     paintCues();
+  }
+}
+
+async function refreshGrammarPage(slug: string): Promise<void> {
+  const key = `page:grammar:${slug}`;
+  cueAfterReady = true;
+  if (shownFor === key && shownExampleOrigins !== null) {
+    paintCues();
+    return;
+  }
+  if (shownFor !== key) {
+    shownFor = key;
+    shownAnswerOrigin = null;
+    shownDetailsOrigin = null;
+    shownExampleOrigins = null;
+    clearAudioSourceIndicator();
+  } else if (shownExampleOrigins === null) {
+    return;
+  }
+
+  const term = await reviewableFromGrammarSlug(slug);
+  if (!term || grammarSlugFromPath() !== slug) {
+    return;
+  }
+
+  await loadExampleOrigins(term, () => grammarSlugFromPath() === slug);
+
+  if (grammarSlugFromPath() !== slug) {
+    return;
+  }
+  if (shownFor === key && shownExampleOrigins === null) {
+    clearShown();
+  }
+}
+
+async function loadExampleOrigins(
+  term: NonNullable<QuizState['reviewable']>,
+  stillCurrent: () => boolean,
+): Promise<void> {
+  try {
+    const sentences = await fetchStudyQuestions(term);
+    if (!stillCurrent()) {
+      return;
+    }
+    shownExampleOrigins = exampleOriginsFromSentences(sentences);
+    paintCues();
+  } catch {
+    // Term-audio lookup already warns; Examples cues are best-effort.
   }
 }
 
@@ -167,6 +250,7 @@ function paintCues(): void {
     afterSubmit: cueAfterReady || readQuizState().isPostAttempt,
     answerOrigin: shownAnswerOrigin,
     detailsOrigin: shownDetailsOrigin,
+    exampleOrigins: shownExampleOrigins,
   });
 }
 
@@ -174,6 +258,7 @@ function clearShown(): void {
   shownFor = null;
   shownAnswerOrigin = null;
   shownDetailsOrigin = null;
+  shownExampleOrigins = null;
   cueAfterReady = false;
   clearAudioSourceIndicator();
 }

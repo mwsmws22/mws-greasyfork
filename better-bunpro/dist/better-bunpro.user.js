@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Better Bunpro
 // @namespace    mwsmws22
-// @version      0.7.0
+// @version      0.8.0
 // @author       mwsmws22
 // @description  Features I wish Bunpro had. Show example sentences for A1+ vocab after a correct answer, cycle sentences with Tab, keep guessing after a wrong answer, add a missed translation as a synonym, edit a wrong answer with Left Arrow, play real speakers instead of synthesised term audio, and more.
 // @license      MIT
@@ -207,14 +207,6 @@
 	function findAnswerConsole() {
 		return document.querySelector(".InputManual");
 	}
-	function findTermAudioControls() {
-		const controls = [];
-		const answer = findAnswerBarAudioControl();
-		if (answer) controls.push(answer);
-		const details = findDetailsPitchPlay();
-		if (details && !controls.includes(details)) controls.push(details);
-		return controls;
-	}
 	function findAnswerBarAudioControl() {
 		const answerConsole = findAnswerConsole();
 		if (!answerConsole) return null;
@@ -231,6 +223,20 @@
 	function findDetailsPitchPlay() {
 		const button = document.querySelector(".DetailsPitchAccent")?.querySelector("button:has(svg[data-name=\"PLAY_CIRCLE_FILLED\"])");
 		return button instanceof HTMLElement ? button : null;
+	}
+	function findExamplesListPlayControls() {
+		const root = document.querySelector(".bp-reviewable-root");
+		if (!root) return [];
+		const controls = [];
+		for (const card of root.querySelectorAll(`[id^="${NATIVE_CARD_ID_PREFIX}"]`)) for (const button of card.querySelectorAll("button[title=\"Play audio\"]")) if (button instanceof HTMLElement) controls.push(button);
+		return controls;
+	}
+	function studyQuestionIdOfPlayControl(control) {
+		const card = control.closest(`[id^="${NATIVE_CARD_ID_PREFIX}"]`);
+		if (!(card instanceof HTMLElement)) return null;
+		const raw = card.id.slice(15);
+		const id = Number(raw);
+		return Number.isFinite(id) ? id : null;
 	}
 	function findQuizConsole() {
 		return document.querySelector(`${QUIZ_ARTICLE} .bp-quiz-console`);
@@ -1469,48 +1475,9 @@ input.bb-correct-guess {
 	function bunproOrigin(hasTtsAudio) {
 		return hasTtsAudio ? "bunpro-tts" : "bunpro-rec";
 	}
-	var PLAY_TITLE_BACKUP = "bbAudioTitle";
-	var REAL_AUDIO_CLASS = "bb-audio-real";
-	var TTS_AUDIO_CLASS = "bb-audio-tts";
-	var DEFAULT_PLAY_TITLE = "Open the audio player and play audio";
-	var LEGACY_CHIP_ID = "bb-audio-source";
-	function syncAudioSourceIndicator(cue) {
-		removeLegacyChip();
-		const label = labelForOrigin(cue.origin);
-		const controls = findTermAudioControls();
-		if (controls.length === 0) return;
-		const emphasize = cue.afterSubmit && isRealAudioOrigin(cue.origin);
-		const asTts = cue.afterSubmit && !isRealAudioOrigin(cue.origin);
-		for (const control of controls) {
-			if (control.title === label && control.classList.contains(REAL_AUDIO_CLASS) === emphasize && control.classList.contains(TTS_AUDIO_CLASS) === asTts) continue;
-			rememberPlayTitle(control);
-			if (control.title !== label) control.title = label;
-			control.classList.toggle(REAL_AUDIO_CLASS, emphasize);
-			control.classList.toggle(TTS_AUDIO_CLASS, asTts);
-		}
-	}
-	function clearAudioSourceIndicator() {
-		restorePlayTitles();
-		clearAudioClasses();
-		removeLegacyChip();
-	}
-	function rememberPlayTitle(control) {
-		if (control.dataset[PLAY_TITLE_BACKUP] === void 0) control.dataset[PLAY_TITLE_BACKUP] = control.title || DEFAULT_PLAY_TITLE;
-	}
-	function restorePlayTitles() {
-		for (const control of findTermAudioControls()) {
-			const original = control.dataset[PLAY_TITLE_BACKUP];
-			if (original !== void 0) {
-				control.title = original;
-				delete control.dataset[PLAY_TITLE_BACKUP];
-			}
-		}
-	}
-	function clearAudioClasses() {
-		for (const control of findTermAudioControls()) control.classList.remove(REAL_AUDIO_CLASS, TTS_AUDIO_CLASS);
-	}
-	function removeLegacyChip() {
-		document.getElementById(LEGACY_CHIP_ID)?.remove();
+	function bunproClipOrigin(url) {
+		if (!url) return null;
+		return url.includes("/audio/vocab/tts/") ? "bunpro-tts" : "bunpro-rec";
 	}
 	var SENTENCE_PLAY = "button[title=\"Play audio\"]";
 	function exampleOnScreenHasAudio() {
@@ -1521,10 +1488,113 @@ input.bb-correct-guess {
 		}
 		if (findNativeSentenceCard()?.querySelector(SENTENCE_PLAY)) return true;
 		const article = findQuizArticle();
-		return Boolean(article?.querySelector(`aside[data-bb-study-question] ${SENTENCE_PLAY}`));
+		if (!article) return prefetchIsExampleSentenceAudio();
+		if (article.querySelector(`aside[data-bb-study-question] ${SENTENCE_PLAY}`)) return true;
+		if (quizHasVisibleSentencePlay(article)) return true;
+		return prefetchIsExampleSentenceAudio();
 	}
 	function studyQuestionHasAudio(sentence) {
 		return sentence.male_audio_url !== null || sentence.female_audio_url !== null;
+	}
+	function quizHasVisibleSentencePlay(article) {
+		for (const node of article.querySelectorAll(SENTENCE_PLAY)) if (node instanceof HTMLElement && isVisiblyDisplayed(node)) return true;
+		return false;
+	}
+	function prefetchIsExampleSentenceAudio() {
+		const href = document.querySelector("link#prefetch-audio")?.href ?? document.querySelector("link[rel=\"prefetch\"][as=\"audio\"]")?.href ?? null;
+		if (!href) return false;
+		return href.includes("/audio/vocab/tts/");
+	}
+	function isVisiblyDisplayed(el) {
+		const rect = el.getBoundingClientRect();
+		if (rect.width <= 0 || rect.height <= 0) return false;
+		const style = getComputedStyle(el);
+		return style.visibility !== "hidden" && style.display !== "none";
+	}
+	function exampleOriginsFromSentences(sentences) {
+		const origins = new Map();
+		for (const sentence of sentences) {
+			const origin = bunproClipOrigin(sentence.female_audio_url ?? sentence.male_audio_url);
+			if (origin) origins.set(sentence.id, origin);
+		}
+		return origins;
+	}
+	function grammarSlugFromPath(pathname = location.pathname) {
+		const match = pathname.match(/^\/grammar_points\/([^/]+)\/?$/);
+		if (!match) return null;
+		try {
+			return decodeURIComponent(match[1]);
+		} catch {
+			return match[1];
+		}
+	}
+	async function reviewableFromGrammarSlug(slug) {
+		const attributes = attributesOf(await bunproRequest(`/reviewables/grammar_point/${encodeURIComponent(slug)}?locale=${bunproLocale()}`));
+		if (typeof attributes?.id !== "number") return null;
+		return {
+			id: attributes.id,
+			type: "grammar_point"
+		};
+	}
+	var PLAY_TITLE_BACKUP = "bbAudioTitle";
+	var REAL_AUDIO_CLASS = "bb-audio-real";
+	var TTS_AUDIO_CLASS = "bb-audio-tts";
+	var DEFAULT_PLAY_TITLE = "Open the audio player and play audio";
+	var LEGACY_CHIP_ID = "bb-audio-source";
+	function syncAudioSourceIndicator(cue) {
+		removeLegacyChip();
+		const answer = findAnswerBarAudioControl();
+		if (answer && cue.answerOrigin) paintControl(answer, cue.answerOrigin, cue.afterSubmit);
+		const details = findDetailsPitchPlay();
+		if (details && cue.detailsOrigin) paintControl(details, cue.detailsOrigin, cue.afterSubmit);
+		paintExampleControls(cue.exampleOrigins ?? null, cue.afterSubmit);
+	}
+	function clearAudioSourceIndicator() {
+		restorePlayTitles();
+		clearAudioClasses();
+		removeLegacyChip();
+	}
+	function paintExampleControls(origins, afterSubmit) {
+		if (!origins || origins.size === 0) return;
+		for (const control of findExamplesListPlayControls()) {
+			const id = studyQuestionIdOfPlayControl(control);
+			if (id === null) continue;
+			const origin = origins.get(id);
+			if (origin) paintControl(control, origin, afterSubmit);
+		}
+	}
+	function paintControl(control, origin, afterSubmit) {
+		const label = labelForOrigin(origin);
+		const emphasize = afterSubmit && isRealAudioOrigin(origin);
+		const asTts = afterSubmit && !isRealAudioOrigin(origin);
+		if (control.title === label && control.classList.contains(REAL_AUDIO_CLASS) === emphasize && control.classList.contains(TTS_AUDIO_CLASS) === asTts) return;
+		rememberPlayTitle(control);
+		if (control.title !== label) control.title = label;
+		control.classList.toggle(REAL_AUDIO_CLASS, emphasize);
+		control.classList.toggle(TTS_AUDIO_CLASS, asTts);
+	}
+	function rememberPlayTitle(control) {
+		if (control.dataset[PLAY_TITLE_BACKUP] === void 0) control.dataset[PLAY_TITLE_BACKUP] = control.title || DEFAULT_PLAY_TITLE;
+	}
+	function paintedControls() {
+		const controls = [findAnswerBarAudioControl(), findDetailsPitchPlay()].filter((el) => el !== null);
+		controls.push(...findExamplesListPlayControls());
+		return controls;
+	}
+	function restorePlayTitles() {
+		for (const control of paintedControls()) {
+			const original = control.dataset[PLAY_TITLE_BACKUP];
+			if (original !== void 0) {
+				control.title = original;
+				delete control.dataset[PLAY_TITLE_BACKUP];
+			}
+		}
+	}
+	function clearAudioClasses() {
+		for (const control of paintedControls()) control.classList.remove(REAL_AUDIO_CLASS, TTS_AUDIO_CLASS);
+	}
+	function removeLegacyChip() {
+		document.getElementById(LEGACY_CHIP_ID)?.remove();
 	}
 	var TIMEOUT_MS = 8e3;
 	function requestText(request) {
@@ -1730,16 +1800,24 @@ input.bb-correct-guess {
 			ttsUrls: ttsUrls.map(canonicalAudioUrl)
 		};
 	}
-	async function loadTermAudio(term, onOrigin, options = {}) {
+	async function loadTermAudio(term, onOrigins, options = {}) {
 		try {
 			const item = await fetchReviewable(term);
 			if (!item || !hasTermAudio(item)) return;
-			onOrigin(bunproOrigin(item.has_tts_audio));
-			if (!options.ignoreExampleAudio && exampleOnScreenHasAudio()) return;
+			const bunpro = bunproOrigin(item.has_tts_audio);
+			onOrigins({
+				answer: bunpro,
+				details: bunpro
+			});
+			const leaveAnswerOnBunpro = !options.ignoreExampleAudio && exampleOnScreenHasAudio();
 			const audio = synthesisedTermAudio(item);
 			if (!audio) return;
 			const replacement = await findReplacement(audio);
-			if (replacement !== null) onOrigin(replacement);
+			if (replacement === null) return;
+			onOrigins({
+				answer: leaveAnswerOnBunpro ? bunpro : replacement,
+				details: replacement
+			});
 		} catch (error) {
 			warnOnce("term-audio", "Could not replace synthesised term audio:", error);
 		}
@@ -1868,20 +1946,27 @@ input.bb-correct-guess {
 	var stopWatchingQuiz$1 = null;
 	var stopWatchingRemounts = null;
 	var shownFor = null;
-	var shownOrigin = null;
+	var shownAnswerOrigin = null;
+	var shownDetailsOrigin = null;
+	var shownExampleOrigins = null;
 	var cueAfterReady = false;
 	var humanTermAudioFeature = {
 		id: "human-term-audio",
 		title: "Play real speakers instead of TTS audio",
-		description: "When Bunpro would play synthesised audio for a vocabulary term, play a recording of a person saying it instead, looked up the same way Yomitan does (JapanesePod101, then Jisho). If the example on screen already has audio — even Bunpro TTS — that clip is left alone and no dictionary lookup runs. On a vocabulary Details page the pitch-accent control is always rewritten. A term Bunpro already recorded is left alone. If nobody has recorded the word, the synthesised clip still plays. After you answer (or always on a Details page), the play button is tinted when a real recording will play, and its tooltip names the source.",
+		description: "When Bunpro would play synthesised audio for a vocabulary term, play a recording of a person saying it instead (JapanesePod101, then Jisho). The Details pitch-accent control is always term audio and always looked up. The quiz answer-bar stays on Bunpro only when an on-screen example sentence already has its own clip; otherwise it follows the term recording too. After you answer (or always on a Details / grammar page), each play button is tinted when a real recording will play, and its tooltip names the source — including Examples list speakers in Info.",
 		enabledByDefault: true,
 		start() {
 			injectStyles();
 			startReplacingAudio();
 			stopWatchingQuiz$1 = watchQuizState(onQuizStateChange$1);
 			stopWatchingRemounts = watchBodyRemounts(() => {
-				if (shownOrigin !== null) paintCue(shownOrigin);
-				if (readQuizState().reviewable?.type !== "vocab") refreshVocabPage();
+				const state = readQuizState();
+				if (state.reviewable && reviewKey(state) !== null) {
+					refreshReview(state);
+					return;
+				}
+				if (shownAnswerOrigin !== null || shownDetailsOrigin !== null || shownExampleOrigins !== null) paintCues();
+				refreshItemPage();
 			});
 		},
 		stop() {
@@ -1893,73 +1978,129 @@ input.bb-correct-guess {
 			forgetReplacements();
 			clearAudioSourceIndicator();
 			shownFor = null;
-			shownOrigin = null;
+			shownAnswerOrigin = null;
+			shownDetailsOrigin = null;
+			shownExampleOrigins = null;
 			cueAfterReady = false;
 		}
 	};
 	function onQuizStateChange$1(state) {
-		const review = reviewKey(state);
-		if (state.reviewable?.type === "vocab" && review !== null) {
-			refreshOrigin(state.reviewable, review);
+		if (state.reviewable && reviewKey(state) !== null) {
+			refreshReview(state);
 			return;
 		}
-		refreshVocabPage();
+		refreshItemPage();
 	}
-	async function refreshOrigin(term, review) {
+	async function refreshReview(state) {
+		const term = state.reviewable;
+		const review = reviewKey(state);
+		if (!term || review === null) return;
 		cueAfterReady = false;
 		if (shownFor !== review) {
 			shownFor = review;
-			shownOrigin = null;
+			shownAnswerOrigin = null;
+			shownDetailsOrigin = null;
+			shownExampleOrigins = null;
 			clearAudioSourceIndicator();
 		}
-		await loadTermAudio(term, (origin) => {
-			if (reviewKey(readQuizState()) !== review) return;
-			shownFor = review;
-			shownOrigin = origin;
-			paintCue(origin);
-		});
-		if (reviewKey(readQuizState()) !== review) return;
-		if (shownFor === review && shownOrigin === null) clearShown();
-		else if (shownOrigin !== null) paintCue(shownOrigin);
-	}
-	async function refreshVocabPage() {
-		const slug = vocabSlugFromPath();
-		if (!slug) {
-			clearShown();
+		loadExampleOrigins(term, () => reviewKey(readQuizState()) === review);
+		if (term.type !== "vocab") {
+			if (shownExampleOrigins !== null) paintCues();
 			return;
 		}
-		const key = `page:${slug}`;
+		await loadTermAudio(term, (origins) => {
+			if (reviewKey(readQuizState()) !== review) return;
+			shownFor = review;
+			shownAnswerOrigin = origins.answer;
+			shownDetailsOrigin = origins.details;
+			paintCues();
+		});
+		if (reviewKey(readQuizState()) !== review) return;
+		if (shownFor === review && shownAnswerOrigin === null && shownDetailsOrigin === null && shownExampleOrigins === null) clearShown();
+		else if (shownAnswerOrigin !== null || shownDetailsOrigin !== null || shownExampleOrigins !== null) paintCues();
+	}
+	async function refreshItemPage() {
+		const vocabSlug = vocabSlugFromPath();
+		if (vocabSlug) {
+			await refreshVocabPage(vocabSlug);
+			return;
+		}
+		const grammarSlug = grammarSlugFromPath();
+		if (grammarSlug) {
+			await refreshGrammarPage(grammarSlug);
+			return;
+		}
+		clearShown();
+	}
+	async function refreshVocabPage(slug) {
+		const key = `page:vocab:${slug}`;
 		cueAfterReady = true;
-		if (shownFor === key && shownOrigin !== null) {
-			paintCue(shownOrigin);
+		if (shownFor === key && shownDetailsOrigin !== null) {
+			paintCues();
 			return;
 		}
 		if (shownFor !== key) {
 			shownFor = key;
-			shownOrigin = null;
+			shownAnswerOrigin = null;
+			shownDetailsOrigin = null;
+			shownExampleOrigins = null;
 			clearAudioSourceIndicator();
-		} else if (shownOrigin === null) return;
+		} else if (shownDetailsOrigin === null) return;
 		const term = await reviewableFromVocabSlug(slug);
 		if (!term || vocabSlugFromPath() !== slug) return;
-		await loadTermAudio(term, (origin) => {
+		loadExampleOrigins(term, () => vocabSlugFromPath() === slug);
+		await loadTermAudio(term, (origins) => {
 			if (vocabSlugFromPath() !== slug) return;
 			shownFor = key;
-			shownOrigin = origin;
-			paintCue(origin);
+			shownAnswerOrigin = origins.answer;
+			shownDetailsOrigin = origins.details;
+			paintCues();
 		}, { ignoreExampleAudio: true });
 		if (vocabSlugFromPath() !== slug) return;
-		if (shownFor === key && shownOrigin === null) clearShown();
-		else if (shownOrigin !== null) paintCue(shownOrigin);
+		if (shownFor === key && shownDetailsOrigin === null && shownExampleOrigins === null) clearShown();
+		else if (shownDetailsOrigin !== null || shownExampleOrigins !== null) paintCues();
 	}
-	function paintCue(origin) {
+	async function refreshGrammarPage(slug) {
+		const key = `page:grammar:${slug}`;
+		cueAfterReady = true;
+		if (shownFor === key && shownExampleOrigins !== null) {
+			paintCues();
+			return;
+		}
+		if (shownFor !== key) {
+			shownFor = key;
+			shownAnswerOrigin = null;
+			shownDetailsOrigin = null;
+			shownExampleOrigins = null;
+			clearAudioSourceIndicator();
+		} else if (shownExampleOrigins === null) return;
+		const term = await reviewableFromGrammarSlug(slug);
+		if (!term || grammarSlugFromPath() !== slug) return;
+		await loadExampleOrigins(term, () => grammarSlugFromPath() === slug);
+		if (grammarSlugFromPath() !== slug) return;
+		if (shownFor === key && shownExampleOrigins === null) clearShown();
+	}
+	async function loadExampleOrigins(term, stillCurrent) {
+		try {
+			const sentences = await fetchStudyQuestions(term);
+			if (!stillCurrent()) return;
+			shownExampleOrigins = exampleOriginsFromSentences(sentences);
+			paintCues();
+		} catch {}
+	}
+	function paintCues() {
 		syncAudioSourceIndicator({
-			origin,
-			afterSubmit: cueAfterReady || readQuizState().isPostAttempt
+			afterSubmit: cueAfterReady || readQuizState().isPostAttempt,
+			answerOrigin: shownAnswerOrigin,
+			detailsOrigin: shownDetailsOrigin,
+			exampleOrigins: shownExampleOrigins
 		});
 	}
 	function clearShown() {
 		shownFor = null;
-		shownOrigin = null;
+		shownAnswerOrigin = null;
+		shownDetailsOrigin = null;
+		shownExampleOrigins = null;
 		cueAfterReady = false;
 		clearAudioSourceIndicator();
 	}
@@ -2075,7 +2216,7 @@ input.bb-correct-guess {
   <circle cx="9" cy="7" r="3.25"/>
   <circle cx="15" cy="17" r="3.25"/>
 </g>`;
-	var version = "0.7.0";
+	var version = "0.8.0";
 	var PANEL_ID = "bb-settings-panel";
 	var CARD_CLASS = "bb-panel-card relative z-1 flex flex-col overflow-hidden rounded-normal border border-rim bg-secondary-bg text-primary-fg shadow-normal";
 	var CLOSE_SHAPES = "<path d=\"M6 6 18 18M18 6 6 18\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\"/>";

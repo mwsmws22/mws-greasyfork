@@ -1,4 +1,9 @@
-import { findAnswerBarAudioControl, findDetailsPitchPlay } from '../bunpro/quiz-dom';
+import {
+  findAnswerBarAudioControl,
+  findDetailsPitchPlay,
+  findExamplesListPlayControls,
+  studyQuestionIdOfPlayControl,
+} from '../bunpro/quiz-dom';
 import type { AudioOrigin } from './origin';
 import { isRealAudioOrigin, labelForOrigin } from './origin';
 
@@ -16,6 +21,11 @@ export interface AudioSourceCue {
   answerOrigin?: AudioOrigin | null;
   /** Details pitch-accent play control — often a different origin when the example has audio. */
   detailsOrigin?: AudioOrigin | null;
+  /**
+   * Info Examples list speakers, keyed by study-question id.
+   * Does not include the quiz on-screen sentence card.
+   */
+  exampleOrigins?: ReadonlyMap<number, AudioOrigin> | null;
 }
 
 /**
@@ -33,12 +43,32 @@ export function syncAudioSourceIndicator(cue: AudioSourceCue): void {
   if (details && cue.detailsOrigin) {
     paintControl(details, cue.detailsOrigin, cue.afterSubmit);
   }
+  paintExampleControls(cue.exampleOrigins ?? null, cue.afterSubmit);
 }
 
 export function clearAudioSourceIndicator(): void {
   restorePlayTitles();
   clearAudioClasses();
   removeLegacyChip();
+}
+
+function paintExampleControls(
+  origins: ReadonlyMap<number, AudioOrigin> | null,
+  afterSubmit: boolean,
+): void {
+  if (!origins || origins.size === 0) {
+    return;
+  }
+  for (const control of findExamplesListPlayControls()) {
+    const id = studyQuestionIdOfPlayControl(control);
+    if (id === null) {
+      continue;
+    }
+    const origin = origins.get(id);
+    if (origin) {
+      paintControl(control, origin, afterSubmit);
+    }
+  }
 }
 
 function paintControl(control: HTMLElement, origin: AudioOrigin, afterSubmit: boolean): void {
@@ -67,11 +97,16 @@ function rememberPlayTitle(control: HTMLElement): void {
   }
 }
 
+function paintedControls(): HTMLElement[] {
+  const controls = [findAnswerBarAudioControl(), findDetailsPitchPlay()].filter(
+    (el): el is HTMLElement => el !== null,
+  );
+  controls.push(...findExamplesListPlayControls());
+  return controls;
+}
+
 function restorePlayTitles(): void {
-  for (const control of [findAnswerBarAudioControl(), findDetailsPitchPlay()]) {
-    if (!control) {
-      continue;
-    }
+  for (const control of paintedControls()) {
     const original = control.dataset[PLAY_TITLE_BACKUP];
     if (original !== undefined) {
       control.title = original;
@@ -81,8 +116,8 @@ function restorePlayTitles(): void {
 }
 
 function clearAudioClasses(): void {
-  for (const control of [findAnswerBarAudioControl(), findDetailsPitchPlay()]) {
-    control?.classList.remove(REAL_AUDIO_CLASS, TTS_AUDIO_CLASS);
+  for (const control of paintedControls()) {
+    control.classList.remove(REAL_AUDIO_CLASS, TTS_AUDIO_CLASS);
   }
 }
 
