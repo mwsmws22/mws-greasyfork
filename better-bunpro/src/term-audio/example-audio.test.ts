@@ -57,6 +57,64 @@ describe('exampleOnScreenHasAudio', () => {
     expect(exampleOnScreenHasAudio()).toBe(true);
   });
 
+  it('is true when a visible sentence speaker is in the quiz footer', () => {
+    document.body.innerHTML = `
+      <div id="js-quiz">
+        <article class="relative">
+          <section></section>
+          <footer>
+            <div class="shrink-0">
+              <button title="Play audio" style="width:24px;height:24px"></button>
+            </div>
+          </footer>
+        </article>
+      </div>
+    `;
+    // jsdom lays out with zero size unless we stub getBoundingClientRect.
+    const play = document.querySelector('button[title="Play audio"]');
+    play!.getBoundingClientRect = () =>
+      ({ width: 24, height: 24, top: 0, left: 0, bottom: 24, right: 24, x: 0, y: 0, toJSON() {} }) as DOMRect;
+
+    expect(exampleOnScreenHasAudio()).toBe(true);
+  });
+
+  it('ignores hidden footer Play audio leftovers on term-only reviews', () => {
+    document.body.innerHTML = `
+      <div id="js-quiz">
+        <article class="relative">
+          <section></section>
+          <footer>
+            <div class="hidden">
+              <div class="shrink-0">
+                <button title="Play audio"></button>
+              </div>
+            </div>
+          </footer>
+        </article>
+      </div>
+      <link rel="prefetch" as="audio" href="https://cdn.example/audio/vocab/pronunciation/糊-male.mp3" />
+    `;
+    expect(exampleOnScreenHasAudio()).toBe(false);
+  });
+
+  it('is true when Bunpro prefetches example-sentence TTS even if the play control is hidden', () => {
+    document.body.innerHTML = `
+      <div id="js-quiz">
+        <article class="relative">
+          <section><p>図工の先生：「糊がしっかり乾いてからでないと」</p></section>
+          <footer>
+            <div class="hidden">
+              <button title="Play audio"></button>
+            </div>
+          </footer>
+        </article>
+      </div>
+      <link id="prefetch-audio" rel="prefetch" as="audio"
+        href="https://cdn.example/audio/vocab/tts/図工の先生：「糊がしっかり乾いてからでないと」-male.mp3" />
+    `;
+    expect(exampleOnScreenHasAudio()).toBe(true);
+  });
+
   it('is false when the example on screen has no speaker', () => {
     document.body.innerHTML = `
       <div id="js-quiz">

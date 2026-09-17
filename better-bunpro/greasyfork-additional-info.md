@@ -34,8 +34,8 @@ After a typed answer is marked wrong, **Backspace** undoes it but also deletes t
 
 ### Play real speakers instead of TTS audio
 
-When Bunpro would play synthesised audio for a vocabulary term, this plays a recording of a person saying it instead, looked up the same way [Yomitan](https://github.com/yomidevs/yomitan) does (JapanesePod101, then Jisho). If the example on screen already has audio — even Bunpro TTS — that clip is left alone. On a vocabulary **Details** page the pitch-accent play control is always rewritten. A term Bunpro already recorded is left alone. If nobody has recorded the word, the synthesised clip still plays.
+When Bunpro would play synthesised audio for a vocabulary term, this plays a recording of a person saying it instead, looked up the same way [Yomitan](https://github.com/yomidevs/yomitan) does (JapanesePod101, then Jisho). The vocabulary **Details** pitch-accent control is always term audio and is always rewritten when a recording exists. The quiz answer-bar stays on Bunpro's clip only when an **on-screen example sentence** already has its own speaker; otherwise the answer bar follows the term recording too. A term Bunpro already recorded is left alone. If nobody has recorded the word, the synthesised clip still plays.
 
-After you answer (or immediately on a Details page), the play button is tinted when a real recording will play. Its tooltip names the source: **JPod101 Recording**, **Jisho Recording**, **Bunpro TTS**, or **Bunpro Recording**.
+After you answer (or immediately on a Details page), each play button is tinted when a real recording will play. Its tooltip names the source: **JPod101 Recording**, **Jisho Recording**, **Bunpro TTS**, or **Bunpro Recording**.
 
 Source: [github.com/mwsmws22/mws-greasyfork](https://github.com/mwsmws22/mws-greasyfork/tree/main/better-bunpro)

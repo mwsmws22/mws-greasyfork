@@ -1,4 +1,4 @@
-import { findTermAudioControls } from '../bunpro/quiz-dom';
+import { findAnswerBarAudioControl, findDetailsPitchPlay } from '../bunpro/quiz-dom';
 import type { AudioOrigin } from './origin';
 import { isRealAudioOrigin, labelForOrigin } from './origin';
 
@@ -10,46 +10,28 @@ const DEFAULT_PLAY_TITLE = 'Open the audio player and play audio';
 const LEGACY_CHIP_ID = 'bb-audio-source';
 
 export interface AudioSourceCue {
-  origin: AudioOrigin;
-  /** Accent the play control only after the answer is in — same moment Bunpro reveals. */
+  /** Accent real recordings only after the answer is in (or always on Details pages). */
   afterSubmit: boolean;
+  /** Quiz answer-bar play control. */
+  answerOrigin?: AudioOrigin | null;
+  /** Details pitch-accent play control — often a different origin when the example has audio. */
+  detailsOrigin?: AudioOrigin | null;
 }
 
 /**
- * Play-button tooltip for the audio source. When the clip is a real recording
- * and the answer is already in, tint the control with Bunpro's primary accent.
- * When only TTS will play, force primary fg so Details (accent by default) reads
- * as untinted.
- *
- * Paints every on-screen term control — answer bar and Details pitch play —
- * so a review page with both does not leave Details unlabeled.
+ * Play-button tooltips for the audio source. Answer bar and Details can disagree:
+ * when the on-screen example already has a clip, the answer bar stays on Bunpro
+ * TTS while Details still shows a real term recording.
  */
 export function syncAudioSourceIndicator(cue: AudioSourceCue): void {
   removeLegacyChip();
-  const label = labelForOrigin(cue.origin);
-  const controls = findTermAudioControls();
-  if (controls.length === 0) {
-    return;
+  const answer = findAnswerBarAudioControl();
+  if (answer && cue.answerOrigin) {
+    paintControl(answer, cue.answerOrigin, cue.afterSubmit);
   }
-
-  const emphasize = cue.afterSubmit && isRealAudioOrigin(cue.origin);
-  const asTts = cue.afterSubmit && !isRealAudioOrigin(cue.origin);
-
-  for (const control of controls) {
-    if (
-      control.title === label &&
-      control.classList.contains(REAL_AUDIO_CLASS) === emphasize &&
-      control.classList.contains(TTS_AUDIO_CLASS) === asTts
-    ) {
-      continue;
-    }
-
-    rememberPlayTitle(control);
-    if (control.title !== label) {
-      control.title = label;
-    }
-    control.classList.toggle(REAL_AUDIO_CLASS, emphasize);
-    control.classList.toggle(TTS_AUDIO_CLASS, asTts);
+  const details = findDetailsPitchPlay();
+  if (details && cue.detailsOrigin) {
+    paintControl(details, cue.detailsOrigin, cue.afterSubmit);
   }
 }
 
@@ -59,6 +41,26 @@ export function clearAudioSourceIndicator(): void {
   removeLegacyChip();
 }
 
+function paintControl(control: HTMLElement, origin: AudioOrigin, afterSubmit: boolean): void {
+  const label = labelForOrigin(origin);
+  const emphasize = afterSubmit && isRealAudioOrigin(origin);
+  const asTts = afterSubmit && !isRealAudioOrigin(origin);
+  if (
+    control.title === label &&
+    control.classList.contains(REAL_AUDIO_CLASS) === emphasize &&
+    control.classList.contains(TTS_AUDIO_CLASS) === asTts
+  ) {
+    return;
+  }
+
+  rememberPlayTitle(control);
+  if (control.title !== label) {
+    control.title = label;
+  }
+  control.classList.toggle(REAL_AUDIO_CLASS, emphasize);
+  control.classList.toggle(TTS_AUDIO_CLASS, asTts);
+}
+
 function rememberPlayTitle(control: HTMLElement): void {
   if (control.dataset[PLAY_TITLE_BACKUP] === undefined) {
     control.dataset[PLAY_TITLE_BACKUP] = control.title || DEFAULT_PLAY_TITLE;
@@ -66,7 +68,10 @@ function rememberPlayTitle(control: HTMLElement): void {
 }
 
 function restorePlayTitles(): void {
-  for (const control of findTermAudioControls()) {
+  for (const control of [findAnswerBarAudioControl(), findDetailsPitchPlay()]) {
+    if (!control) {
+      continue;
+    }
     const original = control.dataset[PLAY_TITLE_BACKUP];
     if (original !== undefined) {
       control.title = original;
@@ -76,8 +81,8 @@ function restorePlayTitles(): void {
 }
 
 function clearAudioClasses(): void {
-  for (const control of findTermAudioControls()) {
-    control.classList.remove(REAL_AUDIO_CLASS, TTS_AUDIO_CLASS);
+  for (const control of [findAnswerBarAudioControl(), findDetailsPitchPlay()]) {
+    control?.classList.remove(REAL_AUDIO_CLASS, TTS_AUDIO_CLASS);
   }
 }
 

@@ -13,7 +13,8 @@ import type { Feature } from '../registry';
 let stopWatchingQuiz: (() => void) | null = null;
 let stopWatchingRemounts: (() => void) | null = null;
 let shownFor: string | null = null;
-let shownOrigin: AudioOrigin | null = null;
+let shownAnswerOrigin: AudioOrigin | null = null;
+let shownDetailsOrigin: AudioOrigin | null = null;
 /** Details pages tint as soon as a real recording is ready — no answer step. */
 let cueAfterReady = false;
 
@@ -22,12 +23,11 @@ export const humanTermAudioFeature: Feature = {
   title: 'Play real speakers instead of TTS audio',
   description:
     'When Bunpro would play synthesised audio for a vocabulary term, play a recording of a ' +
-    'person saying it instead, looked up the same way Yomitan does (JapanesePod101, then Jisho). ' +
-    'If the example on screen already has audio — even Bunpro TTS — that clip is left alone and ' +
-    'no dictionary lookup runs. On a vocabulary Details page the pitch-accent control is always ' +
-    'rewritten. A term Bunpro already recorded is left alone. If nobody has recorded the word, ' +
-    'the synthesised clip still plays. After you answer (or always on a Details page), the play ' +
-    'button is tinted when a real recording will play, and its tooltip names the source.',
+    'person saying it instead (JapanesePod101, then Jisho). The Details pitch-accent control ' +
+    'is always term audio and always looked up. The quiz answer-bar stays on Bunpro only when ' +
+    'an on-screen example sentence already has its own clip; otherwise it follows the term ' +
+    'recording too. After you answer (or always on a Details page), each play button is tinted ' +
+    'when a real recording will play, and its tooltip names the source.',
   enabledByDefault: true,
 
   start() {
@@ -35,10 +35,19 @@ export const humanTermAudioFeature: Feature = {
     startReplacingAudio();
     stopWatchingQuiz = watchQuizState(onQuizStateChange);
     stopWatchingRemounts = watchBodyRemounts(() => {
-      if (shownOrigin !== null) {
-        paintCue(shownOrigin);
-      }
       const state = readQuizState();
+      if (state.reviewable?.type === 'vocab') {
+        const review = reviewKey(state);
+        if (review !== null) {
+          // Sentence speaker often mounts after the first lookup — re-run so the
+          // answer bar can stay on Bunpro when the example has audio.
+          void refreshOrigin(state.reviewable, review);
+          return;
+        }
+      }
+      if (shownAnswerOrigin !== null || shownDetailsOrigin !== null) {
+        paintCues();
+      }
       if (state.reviewable?.type !== 'vocab') {
         void refreshVocabPage();
       }
@@ -54,7 +63,8 @@ export const humanTermAudioFeature: Feature = {
     forgetReplacements();
     clearAudioSourceIndicator();
     shownFor = null;
-    shownOrigin = null;
+    shownAnswerOrigin = null;
+    shownDetailsOrigin = null;
     cueAfterReady = false;
   },
 };
@@ -75,27 +85,28 @@ async function refreshOrigin(
   cueAfterReady = false;
   if (shownFor !== review) {
     shownFor = review;
-    shownOrigin = null;
+    shownAnswerOrigin = null;
+    shownDetailsOrigin = null;
     clearAudioSourceIndicator();
   }
 
-  await loadTermAudio(term, (origin) => {
+  await loadTermAudio(term, (origins) => {
     if (reviewKey(readQuizState()) !== review) {
       return;
     }
     shownFor = review;
-    shownOrigin = origin;
-    paintCue(origin);
+    shownAnswerOrigin = origins.answer;
+    shownDetailsOrigin = origins.details;
+    paintCues();
   });
 
   if (reviewKey(readQuizState()) !== review) {
     return;
   }
-  if (shownFor === review && shownOrigin === null) {
+  if (shownFor === review && shownAnswerOrigin === null && shownDetailsOrigin === null) {
     clearShown();
-  } else if (shownOrigin !== null) {
-    // Answer may have landed while the lookup was in flight — refresh accent.
-    paintCue(shownOrigin);
+  } else if (shownAnswerOrigin !== null || shownDetailsOrigin !== null) {
+    paintCues();
   }
 }
 
@@ -109,16 +120,16 @@ async function refreshVocabPage(): Promise<void> {
 
   const key = `page:${slug}`;
   cueAfterReady = true;
-  if (shownFor === key && shownOrigin !== null) {
-    paintCue(shownOrigin);
+  if (shownFor === key && shownDetailsOrigin !== null) {
+    paintCues();
     return;
   }
   if (shownFor !== key) {
     shownFor = key;
-    shownOrigin = null;
+    shownAnswerOrigin = null;
+    shownDetailsOrigin = null;
     clearAudioSourceIndicator();
-  } else if (shownOrigin === null) {
-    // Lookup already in flight for this page.
+  } else if (shownDetailsOrigin === null) {
     return;
   }
 
@@ -129,13 +140,14 @@ async function refreshVocabPage(): Promise<void> {
 
   await loadTermAudio(
     term,
-    (origin) => {
+    (origins) => {
       if (vocabSlugFromPath() !== slug) {
         return;
       }
       shownFor = key;
-      shownOrigin = origin;
-      paintCue(origin);
+      shownAnswerOrigin = origins.answer;
+      shownDetailsOrigin = origins.details;
+      paintCues();
     },
     { ignoreExampleAudio: true },
   );
@@ -143,23 +155,25 @@ async function refreshVocabPage(): Promise<void> {
   if (vocabSlugFromPath() !== slug) {
     return;
   }
-  if (shownFor === key && shownOrigin === null) {
+  if (shownFor === key && shownDetailsOrigin === null) {
     clearShown();
-  } else if (shownOrigin !== null) {
-    paintCue(shownOrigin);
+  } else if (shownDetailsOrigin !== null) {
+    paintCues();
   }
 }
 
-function paintCue(origin: AudioOrigin): void {
+function paintCues(): void {
   syncAudioSourceIndicator({
-    origin,
     afterSubmit: cueAfterReady || readQuizState().isPostAttempt,
+    answerOrigin: shownAnswerOrigin,
+    detailsOrigin: shownDetailsOrigin,
   });
 }
 
 function clearShown(): void {
   shownFor = null;
-  shownOrigin = null;
+  shownAnswerOrigin = null;
+  shownDetailsOrigin = null;
   cueAfterReady = false;
   clearAudioSourceIndicator();
 }

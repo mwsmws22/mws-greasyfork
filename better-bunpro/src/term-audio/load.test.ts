@@ -13,7 +13,7 @@ vi.mock('./example-audio', () => ({
 
 import { exampleOnScreenHasAudio } from './example-audio';
 import { findReplacement } from './replacements';
-import { loadTermAudio } from './load';
+import { loadTermAudio, type TermAudioOrigins } from './load';
 
 const TERM = { id: 1, type: 'vocab' as const };
 
@@ -30,38 +30,52 @@ afterEach(() => {
   vi.mocked(exampleOnScreenHasAudio).mockReturnValue(false);
 });
 
+function collectOrigins(
+  run: (onOrigins: (origins: TermAudioOrigins) => void) => Promise<void>,
+): Promise<TermAudioOrigins[]> {
+  const origins: TermAudioOrigins[] = [];
+  return run((o) => origins.push(o)).then(() => origins);
+}
+
 describe('loadTermAudio', () => {
-  it('skips dictionary lookup when the example on screen has audio', async () => {
-    vi.spyOn(api, 'fetchReviewable').mockResolvedValue(TTS_ITEM);
-    vi.mocked(exampleOnScreenHasAudio).mockReturnValue(true);
-    vi.mocked(findReplacement).mockClear();
-
-    const origins: string[] = [];
-    await loadTermAudio(TERM, (origin) => origins.push(origin));
-
-    expect(origins).toEqual(['bunpro-tts']);
-    expect(findReplacement).not.toHaveBeenCalled();
-  });
-
-  it('looks up a recording when the example on screen has no audio', async () => {
-    vi.spyOn(api, 'fetchReviewable').mockResolvedValue(TTS_ITEM);
-    vi.mocked(findReplacement).mockResolvedValue('jpod101');
-
-    const origins: string[] = [];
-    await loadTermAudio(TERM, (origin) => origins.push(origin));
-
-    expect(origins).toEqual(['bunpro-tts', 'jpod101']);
-  });
-
-  it('still looks up on a Details page even when an example has audio', async () => {
+  it('keeps the answer bar on Bunpro when the example has audio, but still looks up for Details', async () => {
     vi.spyOn(api, 'fetchReviewable').mockResolvedValue(TTS_ITEM);
     vi.mocked(exampleOnScreenHasAudio).mockReturnValue(true);
     vi.mocked(findReplacement).mockResolvedValue('jpod101');
 
-    const origins: string[] = [];
-    await loadTermAudio(TERM, (origin) => origins.push(origin), { ignoreExampleAudio: true });
+    const origins = await collectOrigins((onOrigins) => loadTermAudio(TERM, onOrigins));
 
-    expect(origins).toEqual(['bunpro-tts', 'jpod101']);
     expect(findReplacement).toHaveBeenCalled();
+    expect(origins).toEqual([
+      { answer: 'bunpro-tts', details: 'bunpro-tts' },
+      { answer: 'bunpro-tts', details: 'jpod101' },
+    ]);
+  });
+
+  it('uses the recording for both controls when the example on screen has no audio', async () => {
+    vi.spyOn(api, 'fetchReviewable').mockResolvedValue(TTS_ITEM);
+    vi.mocked(findReplacement).mockResolvedValue('jpod101');
+
+    const origins = await collectOrigins((onOrigins) => loadTermAudio(TERM, onOrigins));
+
+    expect(origins).toEqual([
+      { answer: 'bunpro-tts', details: 'bunpro-tts' },
+      { answer: 'jpod101', details: 'jpod101' },
+    ]);
+  });
+
+  it('uses the recording for both when ignoreExampleAudio is set', async () => {
+    vi.spyOn(api, 'fetchReviewable').mockResolvedValue(TTS_ITEM);
+    vi.mocked(exampleOnScreenHasAudio).mockReturnValue(true);
+    vi.mocked(findReplacement).mockResolvedValue('jpod101');
+
+    const origins = await collectOrigins((onOrigins) =>
+      loadTermAudio(TERM, onOrigins, { ignoreExampleAudio: true }),
+    );
+
+    expect(origins).toEqual([
+      { answer: 'bunpro-tts', details: 'bunpro-tts' },
+      { answer: 'jpod101', details: 'jpod101' },
+    ]);
   });
 });

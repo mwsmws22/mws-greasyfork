@@ -18,7 +18,7 @@ describe('syncAudioSourceIndicator', () => {
       </div>
     `;
 
-    syncAudioSourceIndicator({ origin: 'jpod101', afterSubmit: true });
+    syncAudioSourceIndicator({ answerOrigin: 'jpod101', afterSubmit: true });
 
     const play = document.querySelector('.InputManual button');
     expect(document.getElementById('bb-audio-source')).toBeNull();
@@ -35,7 +35,7 @@ describe('syncAudioSourceIndicator', () => {
       </div>
     `;
 
-    syncAudioSourceIndicator({ origin: 'bunpro-tts', afterSubmit: true });
+    syncAudioSourceIndicator({ answerOrigin: 'bunpro-tts', afterSubmit: true });
     expect(document.querySelector('.InputManual button')?.classList.contains('bb-audio-real')).toBe(
       false,
     );
@@ -43,7 +43,7 @@ describe('syncAudioSourceIndicator', () => {
       true,
     );
 
-    syncAudioSourceIndicator({ origin: 'jisho', afterSubmit: false });
+    syncAudioSourceIndicator({ answerOrigin: 'jisho', afterSubmit: false });
     expect(document.querySelector('.InputManual button')?.classList.contains('bb-audio-real')).toBe(
       false,
     );
@@ -57,7 +57,7 @@ describe('syncAudioSourceIndicator', () => {
         </button>
       </div>
     `;
-    syncAudioSourceIndicator({ origin: 'bunpro-rec', afterSubmit: true });
+    syncAudioSourceIndicator({ answerOrigin: 'bunpro-rec', afterSubmit: true });
     clearAudioSourceIndicator();
 
     const play = document.querySelector('.InputManual button');
@@ -65,7 +65,7 @@ describe('syncAudioSourceIndicator', () => {
     expect(play?.classList.contains('bb-audio-real')).toBe(false);
   });
 
-  it('accents both the answer-bar and Details play buttons when both are on screen', () => {
+  it('can show Bunpro TTS on the answer bar and a real recording on Details', () => {
     document.body.innerHTML = `
       <div class="InputManual">
         <button title="Open the audio player and play audio">
@@ -79,13 +79,18 @@ describe('syncAudioSourceIndicator', () => {
       </div>
     `;
 
-    syncAudioSourceIndicator({ origin: 'jpod101', afterSubmit: true });
+    syncAudioSourceIndicator({
+      afterSubmit: true,
+      answerOrigin: 'bunpro-tts',
+      detailsOrigin: 'jpod101',
+    });
 
     const answer = document.querySelector('.InputManual button');
     const details = document.querySelector('.DetailsPitchAccent button');
-    expect(answer?.getAttribute('title')).toBe('JPod101 Recording');
+    expect(answer?.getAttribute('title')).toBe('Bunpro TTS');
+    expect(answer?.classList.contains('bb-audio-tts')).toBe(true);
+    expect(answer?.classList.contains('bb-audio-real')).toBe(false);
     expect(details?.getAttribute('title')).toBe('JPod101 Recording');
-    expect(answer?.classList.contains('bb-audio-real')).toBe(true);
     expect(details?.classList.contains('bb-audio-real')).toBe(true);
   });
 
@@ -98,7 +103,7 @@ describe('syncAudioSourceIndicator', () => {
       </div>
     `;
 
-    syncAudioSourceIndicator({ origin: 'jpod101', afterSubmit: true });
+    syncAudioSourceIndicator({ detailsOrigin: 'jpod101', afterSubmit: true });
 
     const play = document.querySelector('.DetailsPitchAccent button');
     expect(play?.getAttribute('title')).toBe('JPod101 Recording');
@@ -115,7 +120,7 @@ describe('syncAudioSourceIndicator', () => {
       </div>
     `;
 
-    syncAudioSourceIndicator({ origin: 'bunpro-tts', afterSubmit: true });
+    syncAudioSourceIndicator({ detailsOrigin: 'bunpro-tts', afterSubmit: true });
 
     const play = document.querySelector('.DetailsPitchAccent button');
     expect(play?.getAttribute('title')).toBe('Bunpro TTS');
@@ -140,11 +145,11 @@ describe('syncAudioSourceIndicator', () => {
         observer.disconnect();
         return;
       }
-      syncAudioSourceIndicator({ origin: 'jpod101', afterSubmit: true });
+      syncAudioSourceIndicator({ answerOrigin: 'jpod101', afterSubmit: true });
     });
     observer.observe(document.body, { childList: true, subtree: true });
 
-    syncAudioSourceIndicator({ origin: 'jpod101', afterSubmit: true });
+    syncAudioSourceIndicator({ answerOrigin: 'jpod101', afterSubmit: true });
     for (let i = 0; i < 10; i += 1) {
       await Promise.resolve();
     }

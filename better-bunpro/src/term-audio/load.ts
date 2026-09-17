@@ -10,25 +10,34 @@ import { synthesisedTermAudio } from './term';
 
 export interface LoadTermAudioOptions {
   /**
-   * Always hunt for a dictionary recording of the term — used on vocabulary
-   * Details pages, where the pitch-accent control is term audio even if an
-   * example sentence elsewhere on the page has a clip.
+   * Treat the answer bar like Details — always use the term lookup result.
+   * Vocabulary detail pages have no example-sentence clip to protect.
    */
   ignoreExampleAudio?: boolean;
 }
 
+/** Origins for the quiz answer-bar vs Details pitch-accent play controls. */
+export interface TermAudioOrigins {
+  answer: AudioOrigin;
+  details: AudioOrigin;
+}
+
 /**
- * The reviewable is cached with its sentences, so this can run as soon as a
- * vocab question appears and again when the answer is revealed.
+ * Loads term-audio origins for the quiz answer bar and Details pitch play.
  *
- * `onOrigin` is called once with Bunpro's own label, then again if a dictionary
- * recording replaces TTS. When the example on screen already has audio, we
- * leave Bunpro alone and do not look up a term recording — unless
- * `ignoreExampleAudio` is set.
+ * ## Policy (do not collapse these into one origin)
+ *
+ * 1. **Details** — always term audio. Always dictionary-lookup. Blue when real.
+ * 2. **Answer bar** — if `exampleOnScreenHasAudio()` (sentence clip on this
+ *    review), stay on Bunpro (white) even when JPod exists for the term.
+ *    Otherwise the answer bar is term audio → same lookup as Details (blue when
+ *    real).
+ * 3. Detection rules live in `example-audio.ts` — hidden footer Play buttons are
+ *    not examples; sentence TTS prefetch `/audio/vocab/tts/` is.
  */
 export async function loadTermAudio(
   term: ReviewableRef,
-  onOrigin: (origin: AudioOrigin) => void,
+  onOrigins: (origins: TermAudioOrigins) => void,
   options: LoadTermAudioOptions = {},
 ): Promise<void> {
   try {
@@ -37,12 +46,11 @@ export async function loadTermAudio(
       return;
     }
 
-    const origin = bunproOrigin(item.has_tts_audio);
-    onOrigin(origin);
+    const bunpro = bunproOrigin(item.has_tts_audio);
+    onOrigins({ answer: bunpro, details: bunpro });
 
-    if (!options.ignoreExampleAudio && exampleOnScreenHasAudio()) {
-      return;
-    }
+    const leaveAnswerOnBunpro =
+      !options.ignoreExampleAudio && exampleOnScreenHasAudio();
 
     const audio = synthesisedTermAudio(item);
     if (!audio) {
@@ -50,9 +58,14 @@ export async function loadTermAudio(
     }
 
     const replacement = await findReplacement(audio);
-    if (replacement !== null) {
-      onOrigin(replacement);
+    if (replacement === null) {
+      return;
     }
+
+    onOrigins({
+      answer: leaveAnswerOnBunpro ? bunpro : replacement,
+      details: replacement,
+    });
   } catch (error) {
     warnOnce('term-audio', 'Could not replace synthesised term audio:', error);
   }
