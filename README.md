@@ -59,13 +59,14 @@ the file to publish is the built `dist/better-bunpro.user.js`.
 
 **Features:**
 
-- _Example sentence for every vocab review._ Bunpro only attaches an example sentence to a review once
-  that sentence's English translation has been verified, so plenty of vocab is reviewed with no sentence
-  at all. This fetches the term's sentences and shows one in the same card Bunpro uses.
-  - Only for vocab, in `translate` question mode, after the answer is revealed **and** correct
-  - Only when Bunpro did not supply a sentence itself
-  - Starts on the term's first sentence, advances one per review session, and wraps around; the same
-    term seen twice in one session keeps the same sentence
+- Example sentences for A1+ vocab after a correct answer (when Bunpro shows none)
+- Tab to cycle example sentences
+- Keep guessing after a wrong typed answer
+- Add a missed vocab translation as a synonym (button or **S**)
+- Left Arrow to re-edit a wrong answer without deleting the last character
+- Real speaker audio instead of synthesised term TTS
+
+Full Greasy Fork descriptions: `better-bunpro/greasyfork-additional-info.md`.
 
 **Settings:**
 

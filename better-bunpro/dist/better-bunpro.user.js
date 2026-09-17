@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Better Bunpro
 // @namespace    mwsmws22
-// @version      0.5.0
+// @version      0.6.0
 // @author       mwsmws22
 // @description  Features I wish Bunpro had. Show example sentences for A1+ vocab after a correct answer, cycle sentences with Tab, keep guessing after a wrong answer, add a missed translation as a synonym, edit a wrong answer with Left Arrow, play real speakers instead of synthesised term audio, and more.
 // @license      MIT
@@ -143,10 +143,11 @@
 		const actions = dialog.querySelectorAll("button.w-full");
 		return actions.length > 0 ? actions[actions.length - 1] ?? null : null;
 	}
-	function undoGradedAnswer() {
+	function undoGradedAnswer(feedback = "silent") {
 		const undo = findUndoButton();
 		if (!undo) return;
-		hideUndoFeedback();
+		if (feedback === "silent") hideUndoFeedback();
+		else showUndoFeedback();
 		undo.click();
 		const confirm = findUndoConfirmButton();
 		if (confirm) {
@@ -1025,7 +1026,7 @@ input.bb-correct-guess {
 			text: state.submittedAnswer ?? findAnswerInput()?.value ?? "",
 			lefts: 1
 		};
-		undoGradedAnswer();
+		undoGradedAnswer("visible");
 	}
 	function onQuizStateChange$3(state) {
 		if (!pending) return;
@@ -1744,7 +1745,7 @@ input.bb-correct-guess {
   <circle cx="9" cy="7" r="3.25"/>
   <circle cx="15" cy="17" r="3.25"/>
 </g>`;
-	var version = "0.5.0";
+	var version = "0.6.0";
 	var PANEL_ID = "bb-settings-panel";
 	var CARD_CLASS = "bb-panel-card relative z-1 flex flex-col overflow-hidden rounded-normal border border-rim bg-secondary-bg text-primary-fg shadow-normal";
 	var CLOSE_SHAPES = "<path d=\"M6 6 18 18M18 6 6 18\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\"/>";

@@ -28,6 +28,10 @@ After you miss a vocab translation, Bunpro hides "Your Synonyms" down in More In
 
 Adding it saves the guess through Bunpro's own synonym request and immediately marks this review correct. A guess Bunpro already accepts is not offered again.
 
+### Edit a wrong answer with Left Arrow
+
+After a typed answer is marked wrong, **Backspace** undoes it but also deletes the last character. With this on, **Left Arrow** undoes without deleting: the full guess stays in the box and the caret moves left, so you can walk to a mistake in the middle and fix it. Same "answer undone" toast as Backspace. Correct answers and More Info tab switching are left alone.
+
 ### Play real speakers instead of TTS audio
 
 When Bunpro would play synthesised audio for a vocabulary term, this plays a recording of a person saying it instead, looked up the same way [Yomitan](https://github.com/yomidevs/yomitan) does (JapanesePod101, then Jisho). Sentence audio is left alone, and a term Bunpro already recorded is left alone. If nobody has recorded the word, the synthesised clip still plays.
