@@ -9,6 +9,7 @@ import {
 } from '../features/registry';
 import { injectStyles } from '../styles';
 import { claimKeystrokes } from '../ui/keystrokes';
+import { descriptionNodes } from './description';
 
 const PANEL_ID = 'bb-settings-panel';
 const CARD_CLASS =
@@ -94,9 +95,11 @@ function buildFeatureList(): HTMLElement {
 }
 
 function buildFeatureRow(feature: Feature): HTMLElement {
-  const description = element('p', { class: 'bb-feature-desc text-small text-tertiary-fg' }, [
-    feature.description,
-  ]);
+  const description = element(
+    'p',
+    { class: 'bb-feature-desc text-small text-tertiary-fg' },
+    descriptionNodes(feature.description),
+  );
   const caret = svgIcon('bb-feature-caret', CARET_SHAPES);
   const summary = element('summary', { class: 'bb-feature-about-summary font-bold' }, [
     element('span', {}, [feature.title]),

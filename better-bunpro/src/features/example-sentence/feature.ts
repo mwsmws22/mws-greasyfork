@@ -25,12 +25,8 @@ export const exampleSentenceFeature: Feature = {
   id: 'example-sentence',
   title: 'Show unverified example sentences for A1+ vocab',
   description:
-    'On the web, Bunpro does not show unverified example sentences for A1+ vocab, ' +
-    'even if you enable "Display Sentence alongside Translation Questions" in review ' +
-    'settings. That is despite such a feature being present in the mobile app. If ' +
-    'enabled, this feature will show these unverified sentences after submitting a ' +
-    'correct answer, and it will cycle through which sentence is displayed for each ' +
-    'review session.',
+    'After a correct answer, show example sentences for A1+ vocab that Bunpro\'s website hides ' +
+    '(the mobile app already shows them). A different sentence rotates each review session.',
   enabledByDefault: true,
 
   start() {

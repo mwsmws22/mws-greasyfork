@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Better Bunpro
 // @namespace    mwsmws22
-// @version      0.8.1
+// @version      0.8.2
 // @author       mwsmws22
 // @description  Features I wish Bunpro had. Show example sentences for A1+ vocab after a correct answer, cycle sentences with Tab, keep guessing after a wrong answer, add a missed translation as a synonym, edit a wrong answer with Left Arrow, play real speakers instead of synthesised term audio, and more.
 // @license      MIT
@@ -571,6 +571,21 @@
 .bb-feature-desc {
   margin-top: 0.5rem;
 }
+.bb-kbd {
+  display: inline-block;
+  margin: 0 0.1em;
+  padding: 0.05em 0.4em;
+  border: 1px solid rgb(var(--c-rim) / 1);
+  border-radius: 0.35em;
+  background: rgb(var(--c-tertiary-bg) / 1);
+  color: rgb(var(--c-primary-fg) / 1);
+  font: inherit;
+  font-size: 0.92em;
+  font-weight: 600;
+  line-height: 1.35;
+  white-space: nowrap;
+  box-shadow: 0 1px 0 rgb(var(--c-rim) / 1);
+}
 .bb-add-synonym {
   width: min(100%, 36rem);
   margin: 0 auto;
@@ -811,8 +826,8 @@ input.bb-correct-guess {
 	var officialSubmitTimer = null;
 	var keepGuessingFeature = {
 		id: "keep-guessing",
-		title: "Keep guessing after a wrong answer",
-		description: "On a review you type an English translation or a reading into, Bunpro reveals the answer the moment you get it wrong. With this on, a wrong answer is not submitted at all: your text stays in the box so you can try again. To give up and see the answer, either clear the box and press Enter, or press Enter again on the same wrong answer. Because a guess this catches never reaches Bunpro, the review is graded on the answer you finally submit.",
+		title: "Don't spoil the answer on a wrong guess",
+		description: "On Manual Translation–style reviews, Bunpro shows the correct answer as soon as you miss — so undo is pointless. With this on, a wrong guess is not submitted: nothing is revealed and your text stays so you can try again. To give up: clear the box and press `Enter`, or press `Enter` again on the same wrong answer.",
 		enabledByDefault: true,
 		start() {
 			injectStyles();
@@ -928,7 +943,7 @@ input.bb-correct-guess {
 	var addSynonymFeature = {
 		id: "add-synonym",
 		title: "Add a wrong answer as a synonym",
-		description: "After you miss a vocab translation, Bunpro hides \"Your Synonyms\" down in More Info. With this on, an Add as synonym button sits next to the wrong answer so you can accept what you typed without scrolling. Adding it saves the guess and immediately marks this review correct. Press S for the same action. The guess is saved through the same request Bunpro's own synonym field uses, and a guess it already accepts is not offered again.",
+		description: "After a missed vocab translation, an Add as synonym button next to your guess (or press `S`) saves it and marks the review correct — no need to dig through More Info.",
 		enabledByDefault: true,
 		start() {
 			injectStyles();
@@ -1054,7 +1069,7 @@ input.bb-correct-guess {
 	var editOnLeftFeature = {
 		id: "edit-on-left",
 		title: "Edit a wrong answer with Left Arrow",
-		description: "After a typed answer is marked wrong, Backspace undoes it but also deletes the last character. With this on, Left Arrow undoes without deleting: the full guess stays in the box and the caret moves left, so you can walk to a mistake in the middle and fix it.",
+		description: "After a wrong typed answer, `Left Arrow` undoes without deleting — the full guess stays so you can fix a mistake in the middle. (`Backspace` still deletes the last character.)",
 		enabledByDefault: true,
 		start() {
 			injectStyles();
@@ -1425,7 +1440,7 @@ input.bb-correct-guess {
 	var exampleSentenceFeature = {
 		id: "example-sentence",
 		title: "Show unverified example sentences for A1+ vocab",
-		description: "On the web, Bunpro does not show unverified example sentences for A1+ vocab, even if you enable \"Display Sentence alongside Translation Questions\" in review settings. That is despite such a feature being present in the mobile app. If enabled, this feature will show these unverified sentences after submitting a correct answer, and it will cycle through which sentence is displayed for each review session.",
+		description: "After a correct answer, show example sentences for A1+ vocab that Bunpro's website hides (the mobile app already shows them). A different sentence rotates each review session.",
 		enabledByDefault: true,
 		start() {
 			injectStyles();
@@ -2151,7 +2166,7 @@ input.bb-correct-guess {
 	var sentenceCycleFeature = {
 		id: "sentence-cycle",
 		title: "Cycle example sentences with Tab",
-		description: "Once you have answered a review correctly, press Tab to see the same item in another one of its example sentences, and again to keep cycling through them. On a cloze review the question sentence itself is swapped; elsewhere the sentence card is. Your answer still belongs to the sentence you were actually quizzed on, and the sentence your next review session starts on is unchanged.",
+		description: "After a correct answer, press `Tab` to cycle through other example sentences for the same item. Your grade and the sentence your next review starts on stay unchanged.",
 		credit: {
 			author: "Joseph G",
 			authorUrl: "https://greasyfork.org/en/users/1613422-joseph-g",
@@ -2216,7 +2231,20 @@ input.bb-correct-guess {
   <circle cx="9" cy="7" r="3.25"/>
   <circle cx="15" cy="17" r="3.25"/>
 </g>`;
-	var version = "0.8.1";
+	var version = "0.8.2";
+	function descriptionNodes(text) {
+		const nodes = [];
+		const pattern = /`([^`]+)`/g;
+		let last = 0;
+		for (const match of text.matchAll(pattern)) {
+			const start = match.index ?? 0;
+			if (start > last) nodes.push(text.slice(last, start));
+			nodes.push(element("kbd", { class: "bb-kbd" }, [match[1]]));
+			last = start + match[0].length;
+		}
+		if (last < text.length) nodes.push(text.slice(last));
+		return nodes.length > 0 ? nodes : [text];
+	}
 	var PANEL_ID = "bb-settings-panel";
 	var CARD_CLASS = "bb-panel-card relative z-1 flex flex-col overflow-hidden rounded-normal border border-rim bg-secondary-bg text-primary-fg shadow-normal";
 	var CLOSE_SHAPES = "<path d=\"M6 6 18 18M18 6 6 18\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\"/>";
@@ -2271,7 +2299,7 @@ input.bb-correct-guess {
 		return element("ul", { class: "grid gap-16" }, listFeatures().map(buildFeatureRow));
 	}
 	function buildFeatureRow(feature) {
-		const description = element("p", { class: "bb-feature-desc text-small text-tertiary-fg" }, [feature.description]);
+		const description = element("p", { class: "bb-feature-desc text-small text-tertiary-fg" }, descriptionNodes(feature.description));
 		const caret = svgIcon("bb-feature-caret", CARET_SHAPES);
 		return element("li", { class: "flex items-start justify-between gap-16" }, [element("details", { class: "bb-feature-about grow" }, [element("summary", { class: "bb-feature-about-summary font-bold" }, [element("span", {}, [feature.title]), caret]), ...feature.credit ? [description, buildCredit(feature.credit)] : [description]]), buildSwitch(feature)]);
 	}

@@ -16,9 +16,8 @@ export const editOnLeftFeature: Feature = {
   id: 'edit-on-left',
   title: 'Edit a wrong answer with Left Arrow',
   description:
-    'After a typed answer is marked wrong, Backspace undoes it but also deletes the last ' +
-    'character. With this on, Left Arrow undoes without deleting: the full guess stays in the ' +
-    'box and the caret moves left, so you can walk to a mistake in the middle and fix it.',
+    'After a wrong typed answer, `Left Arrow` undoes without deleting — the full guess stays so ' +
+    'you can fix a mistake in the middle. (`Backspace` still deletes the last character.)',
   enabledByDefault: true,
 
   start() {

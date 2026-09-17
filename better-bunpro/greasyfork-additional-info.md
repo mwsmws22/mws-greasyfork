@@ -4,33 +4,25 @@ Open settings from the **sliders icon** in the site header (between Search and H
 
 ### Show unverified example sentences for A1+ vocab
 
-On the web, Bunpro does not show unverified example sentences for A1+ vocab, even if you enable "Display Sentence alongside Translation Questions" in review settings. That is despite such a feature being present in the mobile app. If enabled, this feature will show these unverified sentences after submitting a correct answer, and it will cycle through which sentence is displayed for each review session.
+After a correct answer, show example sentences for A1+ vocab that Bunpro's website hides (the mobile app already shows them). A different sentence rotates each review session.
 
 ### Cycle example sentences with Tab
 
-Once you have answered a review correctly, press **Tab** to see the same item in another one of its example sentences, and again to keep cycling through them. On a cloze review the question sentence itself is swapped; elsewhere the sentence card is.
-
-Your answer always belongs to the sentence you were actually quizzed on — nothing is re-graded — and the sentence your next review session starts on is unchanged.
+After a correct answer, press `Tab` to cycle through other example sentences for the same item. Your grade and the sentence your next review starts on stay unchanged.
 
 Idea from [Joseph G](https://greasyfork.org/en/users/1613422-joseph-g)'s [Bunpro Sentence Cycle](https://greasyfork.org/en/scripts/584571-bunpro-sentence-cycle).
 
-### Keep guessing after a wrong answer
+### Don't spoil the answer on a wrong guess
 
-On a review you type an English translation or a reading into, Bunpro reveals the answer the moment you get it wrong, even if you were one word away. With this enabled, a wrong answer is not submitted at all: your text stays in the box so you can try again.
-
-To give up and see the answer, either clear the box and press **Enter**, or press **Enter** again on the same wrong answer. Cloze reviews are untouched, since Bunpro already hints there instead of revealing.
-
-Because a guess this catches never reaches Bunpro, the review is graded on the answer you finally submit.
+On Manual Translation–style reviews, Bunpro shows the correct answer as soon as you miss — so undo is pointless. With this on, a wrong guess is not submitted: nothing is revealed and your text stays so you can try again. To give up: clear the box and press `Enter`, or press `Enter` again on the same wrong answer.
 
 ### Add a wrong answer as a synonym
 
-After you miss a vocab translation, Bunpro hides "Your Synonyms" down in More Info. With this on, an **Add as synonym** button sits next to the wrong answer so you can accept what you typed without scrolling. Press **S** for the same action.
-
-Adding it saves the guess through Bunpro's own synonym request and immediately marks this review correct. A guess Bunpro already accepts is not offered again.
+After a missed vocab translation, an **Add as synonym** button next to your guess (or press `S`) saves it and marks the review correct — no need to dig through More Info.
 
 ### Edit a wrong answer with Left Arrow
 
-After a typed answer is marked wrong, **Backspace** undoes it but also deletes the last character. With this on, **Left Arrow** undoes without deleting: the full guess stays in the box and the caret moves left, so you can walk to a mistake in the middle and fix it. Same "answer undone" toast as Backspace. Correct answers and More Info tab switching are left alone.
+After a wrong typed answer, `Left Arrow` undoes without deleting — the full guess stays so you can fix a mistake in the middle. (`Backspace` still deletes the last character.)
 
 ### Play real speakers instead of TTS audio
 

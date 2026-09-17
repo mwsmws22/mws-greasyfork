@@ -77,6 +77,21 @@ const CSS = `
 .bb-feature-desc {
   margin-top: 0.5rem;
 }
+.bb-kbd {
+  display: inline-block;
+  margin: 0 0.1em;
+  padding: 0.05em 0.4em;
+  border: 1px solid rgb(var(--c-rim) / 1);
+  border-radius: 0.35em;
+  background: rgb(var(--c-tertiary-bg) / 1);
+  color: rgb(var(--c-primary-fg) / 1);
+  font: inherit;
+  font-size: 0.92em;
+  font-weight: 600;
+  line-height: 1.35;
+  white-space: nowrap;
+  box-shadow: 0 1px 0 rgb(var(--c-rim) / 1);
+}
 .bb-add-synonym {
   width: min(100%, 36rem);
   margin: 0 auto;

@@ -27,11 +27,8 @@ export const sentenceCycleFeature: Feature = {
   id: 'sentence-cycle',
   title: 'Cycle example sentences with Tab',
   description:
-    'Once you have answered a review correctly, press Tab to see the same item in another ' +
-    'one of its example sentences, and again to keep cycling through them. On a cloze ' +
-    'review the question sentence itself is swapped; elsewhere the sentence card is. Your ' +
-    'answer still belongs to the sentence you were actually quizzed on, and the sentence ' +
-    'your next review session starts on is unchanged.',
+    'After a correct answer, press `Tab` to cycle through other example sentences for the same ' +
+    'item. Your grade and the sentence your next review starts on stay unchanged.',
   credit: {
     author: 'Joseph G',
     authorUrl: 'https://greasyfork.org/en/users/1613422-joseph-g',

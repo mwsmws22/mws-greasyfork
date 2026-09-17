@@ -32,11 +32,8 @@ export const addSynonymFeature: Feature = {
   id: 'add-synonym',
   title: 'Add a wrong answer as a synonym',
   description:
-    'After you miss a vocab translation, Bunpro hides "Your Synonyms" down in More Info. ' +
-    'With this on, an Add as synonym button sits next to the wrong answer so you can accept ' +
-    'what you typed without scrolling. Adding it saves the guess and immediately marks this ' +
-    'review correct. Press S for the same action. The guess is saved through the same request ' +
-    'Bunpro\'s own synonym field uses, and a guess it already accepts is not offered again.',
+    'After a missed vocab translation, an Add as synonym button next to your guess (or press `S`) ' +
+    'saves it and marks the review correct — no need to dig through More Info.',
   enabledByDefault: true,
 
   start() {

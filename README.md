@@ -61,7 +61,7 @@ the file to publish is the built `dist/better-bunpro.user.js`.
 
 - Example sentences for A1+ vocab after a correct answer (when Bunpro shows none)
 - Tab to cycle example sentences
-- Keep guessing after a wrong typed answer
+- Don't spoil the answer on a wrong typed guess
 - Add a missed vocab translation as a synonym (button or **S**)
 - Left Arrow to re-edit a wrong answer without deleting the last character
 - Real speaker audio instead of synthesised term TTS

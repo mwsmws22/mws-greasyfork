@@ -16,13 +16,12 @@ let officialSubmitTimer: ReturnType<typeof setTimeout> | null = null;
 
 export const keepGuessingFeature: Feature = {
   id: 'keep-guessing',
-  title: 'Keep guessing after a wrong answer',
+  title: "Don't spoil the answer on a wrong guess",
   description:
-    'On a review you type an English translation or a reading into, Bunpro reveals the answer ' +
-    'the moment you get it wrong. With this on, a wrong answer is not submitted at all: your ' +
-    'text stays in the box so you can try again. To give up and see the answer, either clear ' +
-    'the box and press Enter, or press Enter again on the same wrong answer. Because a guess ' +
-    'this catches never reaches Bunpro, the review is graded on the answer you finally submit.',
+    'On Manual Translation–style reviews, Bunpro shows the correct answer as soon as you miss — ' +
+    'so undo is pointless. With this on, a wrong guess is not submitted: nothing is revealed and ' +
+    'your text stays so you can try again. To give up: clear the box and press `Enter`, or press ' +
+    '`Enter` again on the same wrong answer.',
   enabledByDefault: true,
 
   start() {
