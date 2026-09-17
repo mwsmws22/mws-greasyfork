@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Better Bunpro
 // @namespace    mwsmws22
-// @version      0.8.0
+// @version      0.8.1
 // @author       mwsmws22
 // @description  Features I wish Bunpro had. Show example sentences for A1+ vocab after a correct answer, cycle sentences with Tab, keep guessing after a wrong answer, add a missed translation as a synonym, edit a wrong answer with Left Arrow, play real speakers instead of synthesised term audio, and more.
 // @license      MIT
@@ -1953,7 +1953,7 @@ input.bb-correct-guess {
 	var humanTermAudioFeature = {
 		id: "human-term-audio",
 		title: "Play real speakers instead of TTS audio",
-		description: "When Bunpro would play synthesised audio for a vocabulary term, play a recording of a person saying it instead (JapanesePod101, then Jisho). The Details pitch-accent control is always term audio and always looked up. The quiz answer-bar stays on Bunpro only when an on-screen example sentence already has its own clip; otherwise it follows the term recording too. After you answer (or always on a Details / grammar page), each play button is tinted when a real recording will play, and its tooltip names the source — including Examples list speakers in Info.",
+		description: "When Bunpro would play synthesised term audio (TTS / text-to-speech), prefer a real recording instead — looked up like Yomitan (JapanesePod101, then Jisho). Play buttons are white for TTS and blue for real audio; the tooltip names the source.",
 		enabledByDefault: true,
 		start() {
 			injectStyles();
@@ -2216,7 +2216,7 @@ input.bb-correct-guess {
   <circle cx="9" cy="7" r="3.25"/>
   <circle cx="15" cy="17" r="3.25"/>
 </g>`;
-	var version = "0.8.0";
+	var version = "0.8.1";
 	var PANEL_ID = "bb-settings-panel";
 	var CARD_CLASS = "bb-panel-card relative z-1 flex flex-col overflow-hidden rounded-normal border border-rim bg-secondary-bg text-primary-fg shadow-normal";
 	var CLOSE_SHAPES = "<path d=\"M6 6 18 18M18 6 6 18\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\"/>";

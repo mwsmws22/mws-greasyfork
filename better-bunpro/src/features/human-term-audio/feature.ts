@@ -26,13 +26,9 @@ export const humanTermAudioFeature: Feature = {
   id: 'human-term-audio',
   title: 'Play real speakers instead of TTS audio',
   description:
-    'When Bunpro would play synthesised audio for a vocabulary term, play a recording of a ' +
-    'person saying it instead (JapanesePod101, then Jisho). The Details pitch-accent control ' +
-    'is always term audio and always looked up. The quiz answer-bar stays on Bunpro only when ' +
-    'an on-screen example sentence already has its own clip; otherwise it follows the term ' +
-    'recording too. After you answer (or always on a Details / grammar page), each play button ' +
-    'is tinted when a real recording will play, and its tooltip names the source — including ' +
-    'Examples list speakers in Info.',
+    'When Bunpro would play synthesised term audio (TTS / text-to-speech), prefer a real ' +
+    'recording instead — looked up like Yomitan (JapanesePod101, then Jisho). Play buttons ' +
+    'are white for TTS and blue for real audio; the tooltip names the source.',
   enabledByDefault: true,
 
   start() {
