@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Pal System Meal Kit History Filter
 // @namespace    mwsmws22
-// @version      0.2.8
+// @version      0.2.9
 // @author       mwsmws22
 // @license      MIT
 // @description  Hide or highlight meal kits already tried, based on Paperless titles. Flags likely Paperless title typos (~1-3 edits off).
@@ -33,6 +33,11 @@
   const TYPO_HINT_ATTR = "data-pal-mealkit-typo-hint";
   const ORIGINAL_STYLE_ATTR = "data-pal-mealkit-filter-original-style";
   const TITLE_SUFFIX_REGEX = /\s*\d+\s*セット\s*$/;
+  /**
+   * Serving size at the end of a card title, e.g. "2人分" or "2～3人分".
+   * NFKC folds the full-width tilde to "~"; the other tildes stay for safety.
+   */
+  const TRAILING_SERVING_REGEX = /\s*\d+(?:\s*[~～〜]\s*\d+)?\s*人分\s*$/;
   /** Apply these patterns to both PAL and Paperless titles before comparison. */
   const TITLE_NOISE_PATTERNS = [/【冷凍】/g, /\([^)]*人分\s*\)/g];
   /** Levenshtein distance range that counts as a likely Paperless typo (not an exact match). */
@@ -808,6 +813,7 @@
     for (const pattern of TITLE_NOISE_PATTERNS) {
       cleaned = cleaned.replace(pattern, "");
     }
+    cleaned = cleaned.replace(TRAILING_SERVING_REGEX, "");
     return cleaned.replace(/\s+/g, " ").trim();
   }
 
