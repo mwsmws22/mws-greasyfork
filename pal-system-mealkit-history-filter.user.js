@@ -39,7 +39,7 @@
    */
   const TRAILING_SERVING_REGEX = /\s*\d+(?:\s*[~～〜]\s*\d+)?\s*人分\s*$/;
   /** Apply these patterns to both PAL and Paperless titles before comparison. */
-  const TITLE_NOISE_PATTERNS = [/【冷凍】/g, /\([^)]*人分\s*\)/g];
+  const TITLE_NOISE_PATTERNS = [/【冷凍】/g, /【肉増量】/g, /\([^)]*人分\s*\)/g];
   /** Levenshtein distance range that counts as a likely Paperless typo (not an exact match). */
   const TYPO_DISTANCE_MIN = 1;
   const TYPO_DISTANCE_MAX = 3;
