@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Pal System Meal Kit History Filter
 // @namespace    mwsmws22
-// @version      0.3.4
+// @version      0.3.5
 // @author       mwsmws22
 // @license      MIT
 // @description  Meal kits: hide/highlight tried items via Paperless. Other catalogs: 冷凍 / GF filters from card marks and アレルゲン.
@@ -118,7 +118,7 @@
   function runCatalogAttributeMode() {
     catalogReady = true;
     if (glutenFreeOnly) {
-      ensureDisplaySimpleOn();
+      ensureDisplaySimpleOff();
     }
     applyAttributeFiltersToAllItems();
     startPeriodicReapply();
@@ -511,7 +511,7 @@
       glutenFreeOnly = next;
       saveBoolFilter(STORAGE_KEY_GF, next);
       if (next) {
-        ensureDisplaySimpleOn();
+        ensureDisplaySimpleOff();
       }
     });
 
@@ -535,7 +535,7 @@
     button.addEventListener("click", () => {
       setOn(!getOn());
       syncAttrFilterButtons();
-      // GF turns on 表示項目を減らす, which re-renders cards asynchronously.
+      // GF turns off 表示項目を減らす, which re-renders cards asynchronously.
       if (key === "gf" && glutenFreeOnly) {
         setTimeout(() => {
           applyAttributeFiltersToAllItems();
@@ -547,8 +547,8 @@
     return button;
   }
 
-  /** Check the site's 表示項目を減らす box if it is not already on. */
-  function ensureDisplaySimpleOn() {
+  /** Uncheck the site's 表示項目を減らす box if it is currently on. */
+  function ensureDisplaySimpleOff() {
     const section = findPrimaryMealKitSection();
     if (!section) {
       return false;
@@ -557,7 +557,7 @@
     if (!checkbox) {
       return false;
     }
-    if (checkbox.checked) {
+    if (!checkbox.checked) {
       syncDisplayToggleButtonFromCheckbox(checkbox);
       return false;
     }
@@ -609,9 +609,9 @@
         ) {
           syncDisplayToggleButtonFromCheckbox(target);
           if (!isMealKitPage) {
-            // Keep simple display on while Gluten Free filter is active.
-            if (glutenFreeOnly && target instanceof HTMLInputElement && !target.checked) {
-              ensureDisplaySimpleOn();
+            // Keep simple display off while Gluten Free filter is active.
+            if (glutenFreeOnly && target instanceof HTMLInputElement && target.checked) {
+              ensureDisplaySimpleOff();
             }
             setTimeout(() => {
               applyAttributeFiltersToAllItems();
