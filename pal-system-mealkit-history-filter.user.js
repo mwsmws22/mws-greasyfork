@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Pal System Meal Kit History Filter
 // @namespace    mwsmws22
-// @version      0.3.3
+// @version      0.3.4
 // @author       mwsmws22
 // @license      MIT
 // @description  Meal kits: hide/highlight tried items via Paperless. Other catalogs: 冷凍 / GF filters from card marks and アレルゲン.
@@ -503,7 +503,7 @@
   }
 
   function buildCatalogAttrBarLeft() {
-    const frozenBtn = createAttrToggleButton("frozen", "冷凍", () => frozenOnly, (next) => {
+    const frozenBtn = createAttrToggleButton("frozen", "Not 冷凍", () => frozenOnly, (next) => {
       frozenOnly = next;
       saveBoolFilter(STORAGE_KEY_FROZEN, next);
     });
@@ -983,7 +983,8 @@
   }
 
   function itemMatchesAttributeFilters(itemNode) {
-    if (frozenOnly && !isItemFrozen(itemNode)) {
+    // "Not 冷凍" — when on, hide frozen items.
+    if (frozenOnly && isItemFrozen(itemNode)) {
       return false;
     }
 
