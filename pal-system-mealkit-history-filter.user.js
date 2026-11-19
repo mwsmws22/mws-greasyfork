@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Pal System Meal Kit History Filter
 // @namespace    mwsmws22
-// @version      0.3.0
+// @version      0.3.3
 // @author       mwsmws22
 // @license      MIT
 // @description  Meal kits: hide/highlight tried items via Paperless. Other catalogs: 冷凍 / GF filters from card marks and アレルゲン.
@@ -32,10 +32,6 @@
     HIGHLIGHT: "highlight",
     OFF: "off",
   };
-  /** Attribute filter values: null = no filter, "y" / "n". */
-  const ATTR_YES = "y";
-  const ATTR_NO = "n";
-
   const MARK_ATTR = "data-pal-mealkit-filter-marked";
   const HIDDEN_BY_ATTR = "data-pal-catalog-attr-hidden";
   const TYPO_ATTR = "data-pal-mealkit-typo-suspect";
@@ -62,8 +58,9 @@
   /** Normalized Paperless titles kept as a list for near-match (typo) scanning. */
   let triedTitleList = [];
   let currentMode = loadMode();
-  let frozenFilter = loadAttrFilter(STORAGE_KEY_FROZEN);
-  let gfFilter = loadAttrFilter(STORAGE_KEY_GF);
+  /** When true, show only matching items (toggle chips). */
+  let frozenOnly = loadBoolFilter(STORAGE_KEY_FROZEN);
+  let glutenFreeOnly = loadBoolFilter(STORAGE_KEY_GF);
   let observer = null;
   let hasLoadedTitles = false;
   let catalogReady = false;
@@ -120,6 +117,9 @@
 
   function runCatalogAttributeMode() {
     catalogReady = true;
+    if (glutenFreeOnly) {
+      ensureDisplaySimpleOn();
+    }
     applyAttributeFiltersToAllItems();
     startPeriodicReapply();
     startWatchingForListUpdates();
@@ -137,17 +137,15 @@
     localStorage.setItem(STORAGE_KEY_MODE, mode);
   }
 
-  function loadAttrFilter(key) {
+  function loadBoolFilter(key) {
     const saved = localStorage.getItem(key);
-    if (saved === ATTR_YES || saved === ATTR_NO) {
-      return saved;
-    }
-    return null;
+    // "1" / "y" = on; legacy "n" and anything else = off.
+    return saved === "1" || saved === "y";
   }
 
-  function saveAttrFilter(key, value) {
-    if (value === ATTR_YES || value === ATTR_NO) {
-      localStorage.setItem(key, value);
+  function saveBoolFilter(key, on) {
+    if (on) {
+      localStorage.setItem(key, "1");
       return;
     }
     localStorage.removeItem(key);
@@ -505,13 +503,16 @@
   }
 
   function buildCatalogAttrBarLeft() {
-    const frozenGroup = buildAttrFilterGroup("冷凍", "frozen", () => frozenFilter, (next) => {
-      frozenFilter = next;
-      saveAttrFilter(STORAGE_KEY_FROZEN, next);
+    const frozenBtn = createAttrToggleButton("frozen", "冷凍", () => frozenOnly, (next) => {
+      frozenOnly = next;
+      saveBoolFilter(STORAGE_KEY_FROZEN, next);
     });
-    const gfGroup = buildAttrFilterGroup("GF", "gf", () => gfFilter, (next) => {
-      gfFilter = next;
-      saveAttrFilter(STORAGE_KEY_GF, next);
+    const gfBtn = createAttrToggleButton("gf", "Gluten Free", () => glutenFreeOnly, (next) => {
+      glutenFreeOnly = next;
+      saveBoolFilter(STORAGE_KEY_GF, next);
+      if (next) {
+        ensureDisplaySimpleOn();
+      }
     });
 
     const status = document.createElement("span");
@@ -521,52 +522,56 @@
 
     const barLeft = document.createElement("div");
     barLeft.className = "pal-mealkit-filter-bar-left";
-    barLeft.append(frozenGroup.label, frozenGroup.switchWrap, gfGroup.label, gfGroup.switchWrap, status);
+    barLeft.append(frozenBtn, gfBtn, status);
     return barLeft;
   }
 
-  function buildAttrFilterGroup(labelText, key, getValue, setValue) {
-    const label = document.createElement("label");
-    label.textContent = `${labelText}:`;
-    label.className = "pal-mealkit-filter-label";
+  function createAttrToggleButton(key, labelText, getOn, setOn) {
+    const button = document.createElement("button");
+    button.type = "button";
+    button.className = "pal-mealkit-filter-display-btn";
+    button.dataset.attrKey = key;
+    button.textContent = labelText;
+    button.addEventListener("click", () => {
+      setOn(!getOn());
+      syncAttrFilterButtons();
+      // GF turns on 表示項目を減らす, which re-renders cards asynchronously.
+      if (key === "gf" && glutenFreeOnly) {
+        setTimeout(() => {
+          applyAttributeFiltersToAllItems();
+        }, 50);
+        return;
+      }
+      applyAttributeFiltersToAllItems();
+    });
+    return button;
+  }
 
-    const switchWrap = document.createElement("div");
-    switchWrap.className = "pal-mealkit-filter-switch";
-    switchWrap.setAttribute("role", "group");
-    switchWrap.setAttribute("aria-label", `${labelText} filter`);
-    switchWrap.dataset.attrKey = key;
-
-    for (const [value, text] of [
-      [ATTR_YES, "Y"],
-      [ATTR_NO, "N"],
-    ]) {
-      const button = document.createElement("button");
-      button.type = "button";
-      button.className = "pal-mealkit-filter-switch-btn";
-      button.dataset.attrKey = key;
-      button.dataset.attrValue = value;
-      button.textContent = text;
-      button.addEventListener("click", () => {
-        const current = getValue();
-        const next = current === value ? null : value;
-        setValue(next);
-        syncAttrFilterButtons();
-        applyAttributeFiltersToAllItems();
-      });
-      switchWrap.appendChild(button);
+  /** Check the site's 表示項目を減らす box if it is not already on. */
+  function ensureDisplaySimpleOn() {
+    const section = findPrimaryMealKitSection();
+    if (!section) {
+      return false;
     }
-
-    return { label, switchWrap };
+    const checkbox = section.querySelector('.vue-items-display-setting input[type="checkbox"]');
+    if (!checkbox) {
+      return false;
+    }
+    if (checkbox.checked) {
+      syncDisplayToggleButtonFromCheckbox(checkbox);
+      return false;
+    }
+    checkbox.click();
+    syncDisplayToggleButtonFromCheckbox(checkbox);
+    return true;
   }
 
   function syncAttrFilterButtons() {
-    document.querySelectorAll(".pal-mealkit-filter-switch-btn[data-attr-key]").forEach((button) => {
+    document.querySelectorAll("#pal-mealkit-filter-bar [data-attr-key]").forEach((button) => {
       const key = button.dataset.attrKey;
-      const value = button.dataset.attrValue;
-      const current = key === "frozen" ? frozenFilter : key === "gf" ? gfFilter : null;
-      const active = current === value;
-      button.classList.toggle("is-active", active);
-      button.setAttribute("aria-pressed", active ? "true" : "false");
+      const on = key === "frozen" ? frozenOnly : key === "gf" ? glutenFreeOnly : false;
+      button.classList.toggle("is-active", on);
+      button.setAttribute("aria-pressed", on ? "true" : "false");
     });
   }
 
@@ -603,6 +608,15 @@
           target.matches('.vue-items-display-setting input[type="checkbox"]')
         ) {
           syncDisplayToggleButtonFromCheckbox(target);
+          if (!isMealKitPage) {
+            // Keep simple display on while Gluten Free filter is active.
+            if (glutenFreeOnly && target instanceof HTMLInputElement && !target.checked) {
+              ensureDisplaySimpleOn();
+            }
+            setTimeout(() => {
+              applyAttributeFiltersToAllItems();
+            }, 0);
+          }
         }
       });
     }
@@ -814,8 +828,8 @@
 
       updateStatus(`表示: ${visibleCount}件 / ${itemNodes.length}件`);
       log("attr filters applied", {
-        frozenFilter,
-        gfFilter,
+        frozenOnly,
+        glutenFreeOnly,
         visibleCount,
         total: itemNodes.length,
       });
@@ -845,18 +859,95 @@
   }
 
   /**
-   * GF = アレルゲン text does not include 小麦.
-   * Returns true / false / null (unknown when no アレルゲン row).
+   * GF = no 小麦 in アレルゲン text. Missing/empty アレルゲン counts as GF.
+   * Returns true / false / null (unknown only when simple-mode data cannot be resolved).
    */
   function isItemGlutenFree(itemNode) {
     const allergenText = getItemAllergenText(itemNode);
     if (allergenText == null) {
       return null;
     }
+    if (!allergenText) {
+      return true;
+    }
     return !allergenText.includes("小麦");
   }
 
-  function getItemAllergenText(itemNode) {
+  function isDisplaySimpleActive() {
+    const section = findPrimaryMealKitSection();
+    const root = section || document;
+    const checkbox = root.querySelector('.vue-items-display-setting input[type="checkbox"]');
+    return Boolean(checkbox && checkbox.checked);
+  }
+
+  function getVueInstance(el) {
+    if (!el) {
+      return null;
+    }
+    return el.__vue__ || null;
+  }
+
+  function getCardVueItem(itemNode) {
+    let el = itemNode;
+    for (let depth = 0; depth < 6 && el; depth += 1) {
+      const vue = getVueInstance(el);
+      if (vue && vue.item) {
+        return vue.item;
+      }
+      el = el.parentElement;
+    }
+    return null;
+  }
+
+  function itemsMatchIdentity(a, b) {
+    if (!a || !b) {
+      return false;
+    }
+    if (a.itemCd != null && b.itemCd != null && String(a.itemCd) === String(b.itemCd)) {
+      if (a.productCatalogNo != null && b.productCatalogNo != null) {
+        return String(a.productCatalogNo) === String(b.productCatalogNo);
+      }
+      return true;
+    }
+    return false;
+  }
+
+  /**
+   * 表示項目を減らす maps cards through Bl/SimpleItem with spec.allergy forced to null.
+   * Parent list components still keep the original items[] with real allergy data.
+   */
+  function findFullListVueItem(itemNode) {
+    const cardItem = getCardVueItem(itemNode);
+    if (!cardItem) {
+      return null;
+    }
+
+    let el = itemNode.parentElement;
+    for (let depth = 0; depth < 25 && el; depth += 1) {
+      const vue = getVueInstance(el);
+      if (vue && Array.isArray(vue.items) && vue.items.length) {
+        const match = vue.items.find((candidate) => itemsMatchIdentity(candidate, cardItem));
+        if (match) {
+          return match;
+        }
+      }
+      el = el.parentElement;
+    }
+
+    return null;
+  }
+
+  function allergenTextFromSpec(vueItem) {
+    if (!vueItem || !vueItem.spec) {
+      return "";
+    }
+    if (vueItem.spec.allergy == null || vueItem.spec.allergy === "") {
+      return "";
+    }
+    return String(vueItem.spec.allergy).trim();
+  }
+
+  function getAllergenTextFromDom(itemNode) {
     const rows = itemNode.querySelectorAll("li.list, .word-list li, .item-card li");
     for (const row of rows) {
       const tag = row.querySelector(".tag, .word");
@@ -872,22 +963,32 @@
     return null;
   }
 
-  function itemMatchesAttributeFilters(itemNode) {
-    if (frozenFilter === ATTR_YES && !isItemFrozen(itemNode)) {
-      return false;
+  function getItemAllergenText(itemNode) {
+    const fromDom = getAllergenTextFromDom(itemNode);
+    if (fromDom != null) {
+      return fromDom;
     }
-    if (frozenFilter === ATTR_NO && isItemFrozen(itemNode)) {
+
+    // 表示項目を減らす removes the アレルゲン row and nulls card spec.allergy — use parent items[].
+    if (isDisplaySimpleActive()) {
+      const fullItem = findFullListVueItem(itemNode);
+      if (!fullItem) {
+        return null;
+      }
+      return allergenTextFromSpec(fullItem);
+    }
+
+    // Full display with no アレルゲン row ⇒ none listed ⇒ GF.
+    return "";
+  }
+
+  function itemMatchesAttributeFilters(itemNode) {
+    if (frozenOnly && !isItemFrozen(itemNode)) {
       return false;
     }
 
-    if (gfFilter === ATTR_YES || gfFilter === ATTR_NO) {
-      const gf = isItemGlutenFree(itemNode);
-      if (gfFilter === ATTR_YES && gf !== true) {
-        return false;
-      }
-      if (gfFilter === ATTR_NO && gf !== false) {
-        return false;
-      }
+    if (glutenFreeOnly && isItemGlutenFree(itemNode) !== true) {
+      return false;
     }
 
     return true;
