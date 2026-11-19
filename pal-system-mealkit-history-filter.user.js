@@ -1,11 +1,11 @@
 // ==UserScript==
 // @name         Pal System Meal Kit History Filter
 // @namespace    mwsmws22
-// @version      0.2.10
+// @version      0.3.0
 // @author       mwsmws22
 // @license      MIT
-// @description  Hide or highlight meal kits already tried, based on Paperless titles. Flags likely Paperless title typos (~1-3 edits off).
-// @match        https://shop.pal-system.co.jp/pal/InesOrderContents.do?contentsId=A900001*
+// @description  Meal kits: hide/highlight tried items via Paperless. Other catalogs: 冷凍 / GF filters from card marks and アレルゲン.
+// @match        https://shop.pal-system.co.jp/pal/InesOrderContents.do*
 // @run-at       document-idle
 // @grant        GM_xmlhttpRequest
 // ==/UserScript==
@@ -20,15 +20,24 @@
   const FETCH_TIMEOUT_MS = 12000;
   const FETCH_RETRY_COUNT = 2;
 
+  /** お料理セット category — Paperless history filters only on this page. */
+  const MEAL_KIT_CONTENTS_ID_PREFIX = "A900001";
+
   const STORAGE_KEY_MODE = "palMealKitFilterMode";
+  const STORAGE_KEY_FROZEN = "palCatalogFilterFrozen";
+  const STORAGE_KEY_GF = "palCatalogFilterGf";
   const DEFAULT_MODE = "highlight";
   const MODES = {
     HIDE: "hide",
     HIGHLIGHT: "highlight",
     OFF: "off",
   };
+  /** Attribute filter values: null = no filter, "y" / "n". */
+  const ATTR_YES = "y";
+  const ATTR_NO = "n";
 
   const MARK_ATTR = "data-pal-mealkit-filter-marked";
+  const HIDDEN_BY_ATTR = "data-pal-catalog-attr-hidden";
   const TYPO_ATTR = "data-pal-mealkit-typo-suspect";
   const TYPO_HINT_ATTR = "data-pal-mealkit-typo-hint";
   const ORIGINAL_STYLE_ATTR = "data-pal-mealkit-filter-original-style";
@@ -47,14 +56,19 @@
   const TYPO_MIN_TITLE_LENGTH = 4;
   const REAPPLY_INTERVAL_MS = 1200;
 
+  const isMealKitPage = getContentsId().startsWith(MEAL_KIT_CONTENTS_ID_PREFIX);
+
   let triedTitles = new Set();
   /** Normalized Paperless titles kept as a list for near-match (typo) scanning. */
   let triedTitleList = [];
   let currentMode = loadMode();
+  let frozenFilter = loadAttrFilter(STORAGE_KEY_FROZEN);
+  let gfFilter = loadAttrFilter(STORAGE_KEY_GF);
   let observer = null;
   let hasLoadedTitles = false;
+  let catalogReady = false;
   let reapplyTimer = null;
-  let latestStatusText = "Paperless読み込み中...";
+  let latestStatusText = isMealKitPage ? "Paperless読み込み中..." : "";
   /** True while we mutate the list (e.g. typo badges) so MutationObserver does not re-enter. */
   let isApplyingMode = false;
 
@@ -65,10 +79,28 @@
     console.log("[Pal MealKit Filter]", ...args);
   }
 
+  function getContentsId() {
+    try {
+      return new URLSearchParams(location.search).get("contentsId") || "";
+    } catch (_err) {
+      return "";
+    }
+  }
+
   function run() {
     injectStyles();
     injectControlBar();
-    log("run start", { url: location.href, mode: currentMode });
+    log("run start", { url: location.href, isMealKitPage, mode: currentMode });
+
+    if (isMealKitPage) {
+      runMealKitMode();
+      return;
+    }
+
+    runCatalogAttributeMode();
+  }
+
+  function runMealKitMode() {
     fetchTriedTitlesWithRetry(FETCH_RETRY_COUNT)
       .then((titles) => {
         triedTitleList = Array.from(titles);
@@ -86,6 +118,13 @@
       });
   }
 
+  function runCatalogAttributeMode() {
+    catalogReady = true;
+    applyAttributeFiltersToAllItems();
+    startPeriodicReapply();
+    startWatchingForListUpdates();
+  }
+
   function loadMode() {
     const saved = localStorage.getItem(STORAGE_KEY_MODE);
     if (saved === MODES.HIDE || saved === MODES.HIGHLIGHT || saved === MODES.OFF) {
@@ -96,6 +135,22 @@
 
   function saveMode(mode) {
     localStorage.setItem(STORAGE_KEY_MODE, mode);
+  }
+
+  function loadAttrFilter(key) {
+    const saved = localStorage.getItem(key);
+    if (saved === ATTR_YES || saved === ATTR_NO) {
+      return saved;
+    }
+    return null;
+  }
+
+  function saveAttrFilter(key, value) {
+    if (value === ATTR_YES || value === ATTR_NO) {
+      localStorage.setItem(key, value);
+      return;
+    }
+    localStorage.removeItem(key);
   }
 
   function injectStyles() {
@@ -391,32 +446,7 @@
     bar.id = "pal-mealkit-filter-bar";
     bar.className = "pal-mealkit-filter-bar";
 
-    const label = document.createElement("label");
-    label.textContent = "試したお料理セット:";
-    label.className = "pal-mealkit-filter-label";
-
-    const switchWrap = document.createElement("div");
-    switchWrap.className = "pal-mealkit-filter-switch";
-    switchWrap.setAttribute("role", "tablist");
-    switchWrap.setAttribute("aria-label", "Meal kit filter mode");
-
-    const buttons = [
-      createModeButton(MODES.HIGHLIGHT, "Highlight"),
-      createModeButton(MODES.HIDE, "Hide"),
-      createModeButton(MODES.OFF, "Off"),
-    ];
-    for (const button of buttons) {
-      switchWrap.appendChild(button);
-    }
-
-    const status = document.createElement("span");
-    status.id = "pal-mealkit-filter-status";
-    status.className = "pal-mealkit-filter-status";
-    status.textContent = latestStatusText;
-
-    const barLeft = document.createElement("div");
-    barLeft.className = "pal-mealkit-filter-bar-left";
-    barLeft.append(label, switchWrap, status);
+    const barLeft = isMealKitPage ? buildMealKitBarLeft() : buildCatalogAttrBarLeft();
 
     const displayToggleBtn = document.createElement("button");
     displayToggleBtn.type = "button";
@@ -437,8 +467,107 @@
     }
 
     mount.insertBefore(bar, mount.firstChild);
-    syncModeButtons();
+    if (isMealKitPage) {
+      syncModeButtons();
+    } else {
+      syncAttrFilterButtons();
+    }
     setupDisplayItemsToggle();
+  }
+
+  function buildMealKitBarLeft() {
+    const label = document.createElement("label");
+    label.textContent = "試したお料理セット:";
+    label.className = "pal-mealkit-filter-label";
+
+    const switchWrap = document.createElement("div");
+    switchWrap.className = "pal-mealkit-filter-switch";
+    switchWrap.setAttribute("role", "tablist");
+    switchWrap.setAttribute("aria-label", "Meal kit filter mode");
+
+    for (const button of [
+      createModeButton(MODES.HIGHLIGHT, "Highlight"),
+      createModeButton(MODES.HIDE, "Hide"),
+      createModeButton(MODES.OFF, "Off"),
+    ]) {
+      switchWrap.appendChild(button);
+    }
+
+    const status = document.createElement("span");
+    status.id = "pal-mealkit-filter-status";
+    status.className = "pal-mealkit-filter-status";
+    status.textContent = latestStatusText;
+
+    const barLeft = document.createElement("div");
+    barLeft.className = "pal-mealkit-filter-bar-left";
+    barLeft.append(label, switchWrap, status);
+    return barLeft;
+  }
+
+  function buildCatalogAttrBarLeft() {
+    const frozenGroup = buildAttrFilterGroup("冷凍", "frozen", () => frozenFilter, (next) => {
+      frozenFilter = next;
+      saveAttrFilter(STORAGE_KEY_FROZEN, next);
+    });
+    const gfGroup = buildAttrFilterGroup("GF", "gf", () => gfFilter, (next) => {
+      gfFilter = next;
+      saveAttrFilter(STORAGE_KEY_GF, next);
+    });
+
+    const status = document.createElement("span");
+    status.id = "pal-mealkit-filter-status";
+    status.className = "pal-mealkit-filter-status";
+    status.textContent = latestStatusText;
+
+    const barLeft = document.createElement("div");
+    barLeft.className = "pal-mealkit-filter-bar-left";
+    barLeft.append(frozenGroup.label, frozenGroup.switchWrap, gfGroup.label, gfGroup.switchWrap, status);
+    return barLeft;
+  }
+
+  function buildAttrFilterGroup(labelText, key, getValue, setValue) {
+    const label = document.createElement("label");
+    label.textContent = `${labelText}:`;
+    label.className = "pal-mealkit-filter-label";
+
+    const switchWrap = document.createElement("div");
+    switchWrap.className = "pal-mealkit-filter-switch";
+    switchWrap.setAttribute("role", "group");
+    switchWrap.setAttribute("aria-label", `${labelText} filter`);
+    switchWrap.dataset.attrKey = key;
+
+    for (const [value, text] of [
+      [ATTR_YES, "Y"],
+      [ATTR_NO, "N"],
+    ]) {
+      const button = document.createElement("button");
+      button.type = "button";
+      button.className = "pal-mealkit-filter-switch-btn";
+      button.dataset.attrKey = key;
+      button.dataset.attrValue = value;
+      button.textContent = text;
+      button.addEventListener("click", () => {
+        const current = getValue();
+        const next = current === value ? null : value;
+        setValue(next);
+        syncAttrFilterButtons();
+        applyAttributeFiltersToAllItems();
+      });
+      switchWrap.appendChild(button);
+    }
+
+    return { label, switchWrap };
+  }
+
+  function syncAttrFilterButtons() {
+    document.querySelectorAll(".pal-mealkit-filter-switch-btn[data-attr-key]").forEach((button) => {
+      const key = button.dataset.attrKey;
+      const value = button.dataset.attrValue;
+      const current = key === "frozen" ? frozenFilter : key === "gf" ? gfFilter : null;
+      const active = current === value;
+      button.classList.toggle("is-active", active);
+      button.setAttribute("aria-pressed", active ? "true" : "false");
+    });
   }
 
   function syncDisplayToggleButtonFromCheckbox(checkbox) {
@@ -594,7 +723,11 @@
         return;
       }
       log("mutation observed");
-      applyModeToAllItems();
+      if (isMealKitPage) {
+        applyModeToAllItems();
+      } else {
+        applyAttributeFiltersToAllItems();
+      }
     });
 
     observer.observe(listRoot, {
@@ -610,8 +743,14 @@
     reapplyTimer = setInterval(() => {
       injectControlBar();
       setupDisplayItemsToggle();
-      if (hasLoadedTitles) {
-        applyModeToAllItems();
+      if (isMealKitPage) {
+        if (hasLoadedTitles) {
+          applyModeToAllItems();
+        }
+        return;
+      }
+      if (catalogReady) {
+        applyAttributeFiltersToAllItems();
       }
     }, REAPPLY_INTERVAL_MS);
   }
@@ -653,6 +792,120 @@
       }
       isApplyingMode = false;
     }
+  }
+
+  function applyAttributeFiltersToAllItems() {
+    if (isApplyingMode) {
+      return;
+    }
+
+    isApplyingMode = true;
+    try {
+      const itemNodes = getMealKitItems();
+      let visibleCount = 0;
+
+      itemNodes.forEach((item) => {
+        const visible = itemMatchesAttributeFilters(item);
+        applyAttributeVisibility(item, visible);
+        if (visible) {
+          visibleCount += 1;
+        }
+      });
+
+      updateStatus(`表示: ${visibleCount}件 / ${itemNodes.length}件`);
+      log("attr filters applied", {
+        frozenFilter,
+        gfFilter,
+        visibleCount,
+        total: itemNodes.length,
+      });
+    } finally {
+      if (observer) {
+        observer.takeRecords();
+      }
+      isApplyingMode = false;
+    }
+  }
+
+  function isItemFrozen(itemNode) {
+    if (itemNode.querySelector(".mark-frozen")) {
+      return true;
+    }
+    const marks = itemNode.querySelectorAll(".mark-group .mark, .item-name .mark");
+    for (const mark of marks) {
+      if ((mark.textContent || "").includes("冷凍")) {
+        return true;
+      }
+    }
+    const name = itemNode.querySelector(".item-name .name a");
+    if (name && /【冷凍】/.test(name.textContent || "")) {
+      return true;
+    }
+    return false;
+  }
+
+  /**
+   * GF = アレルゲン text does not include 小麦.
+   * Returns true / false / null (unknown when no アレルゲン row).
+   */
+  function isItemGlutenFree(itemNode) {
+    const allergenText = getItemAllergenText(itemNode);
+    if (allergenText == null) {
+      return null;
+    }
+    return !allergenText.includes("小麦");
+  }
+
+  function getItemAllergenText(itemNode) {
+    const rows = itemNode.querySelectorAll("li.list, .word-list li, .item-card li");
+    for (const row of rows) {
+      const tag = row.querySelector(".tag, .word");
+      if (!tag) {
+        continue;
+      }
+      if (!(tag.textContent || "").includes("アレルゲン")) {
+        continue;
+      }
+      const textEl = row.querySelector(".text");
+      return ((textEl && textEl.textContent) || "").trim();
+    }
+    return null;
+  }
+
+  function itemMatchesAttributeFilters(itemNode) {
+    if (frozenFilter === ATTR_YES && !isItemFrozen(itemNode)) {
+      return false;
+    }
+    if (frozenFilter === ATTR_NO && isItemFrozen(itemNode)) {
+      return false;
+    }
+
+    if (gfFilter === ATTR_YES || gfFilter === ATTR_NO) {
+      const gf = isItemGlutenFree(itemNode);
+      if (gfFilter === ATTR_YES && gf !== true) {
+        return false;
+      }
+      if (gfFilter === ATTR_NO && gf !== false) {
+        return false;
+      }
+    }
+
+    return true;
+  }
+
+  function applyAttributeVisibility(itemNode, visible) {
+    if (!itemNode.hasAttribute(ORIGINAL_STYLE_ATTR)) {
+      itemNode.setAttribute(ORIGINAL_STYLE_ATTR, itemNode.getAttribute("style") || "");
+    }
+
+    if (visible) {
+      itemNode.style.display = "";
+      itemNode.removeAttribute(HIDDEN_BY_ATTR);
+      return;
+    }
+
+    itemNode.style.display = "none";
+    itemNode.setAttribute(HIDDEN_BY_ATTR, "1");
   }
 
   function getMealKitItems() {
