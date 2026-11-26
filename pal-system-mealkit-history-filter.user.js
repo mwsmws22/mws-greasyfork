@@ -1,10 +1,10 @@
 // ==UserScript==
 // @name         Pal System Meal Kit History Filter
 // @namespace    mwsmws22
-// @version      0.3.5
+// @version      0.3.6
 // @author       mwsmws22
 // @license      MIT
-// @description  Meal kits: hide/highlight tried items via Paperless. Other catalogs: 冷凍 / GF filters from card marks and アレルゲン.
+// @description  Meal kits: hide/highlight tried items via Paperless. Other catalogs: 冷凍 / 冷蔵 / GF filters from card marks and アレルゲン.
 // @match        https://shop.pal-system.co.jp/pal/InesOrderContents.do*
 // @run-at       document-idle
 // @grant        GM_xmlhttpRequest
@@ -25,6 +25,7 @@
 
   const STORAGE_KEY_MODE = "palMealKitFilterMode";
   const STORAGE_KEY_FROZEN = "palCatalogFilterFrozen";
+  const STORAGE_KEY_REFRIGERATED = "palCatalogFilterRefrigerated";
   const STORAGE_KEY_GF = "palCatalogFilterGf";
   const DEFAULT_MODE = "highlight";
   const MODES = {
@@ -58,9 +59,10 @@
   /** Normalized Paperless titles kept as a list for near-match (typo) scanning. */
   let triedTitleList = [];
   let currentMode = loadMode();
-  /** When true, show only matching items (toggle chips). */
-  let frozenOnly = loadBoolFilter(STORAGE_KEY_FROZEN);
-  let glutenFreeOnly = loadBoolFilter(STORAGE_KEY_GF);
+  /** When true, hide/filter matching items (toggle chips). */
+  let frozenOnly = loadBoolFilter(STORAGE_KEY_FROZEN, false);
+  let notRefrigerated = loadBoolFilter(STORAGE_KEY_REFRIGERATED, true);
+  let glutenFreeOnly = loadBoolFilter(STORAGE_KEY_GF, false);
   let observer = null;
   let hasLoadedTitles = false;
   let catalogReady = false;
@@ -137,18 +139,17 @@
     localStorage.setItem(STORAGE_KEY_MODE, mode);
   }
 
-  function loadBoolFilter(key) {
+  function loadBoolFilter(key, defaultValue = false) {
     const saved = localStorage.getItem(key);
-    // "1" / "y" = on; legacy "n" and anything else = off.
+    if (saved === null) {
+      return defaultValue;
+    }
+    // "1" / "y" = on; "0" / "n" and anything else = off.
     return saved === "1" || saved === "y";
   }
 
   function saveBoolFilter(key, on) {
-    if (on) {
-      localStorage.setItem(key, "1");
-      return;
-    }
-    localStorage.removeItem(key);
+    localStorage.setItem(key, on ? "1" : "0");
   }
 
   function injectStyles() {
@@ -507,6 +508,15 @@
       frozenOnly = next;
       saveBoolFilter(STORAGE_KEY_FROZEN, next);
     });
+    const refrigeratedBtn = createAttrToggleButton(
+      "refrigerated",
+      "Not 冷蔵",
+      () => notRefrigerated,
+      (next) => {
+        notRefrigerated = next;
+        saveBoolFilter(STORAGE_KEY_REFRIGERATED, next);
+      }
+    );
     const gfBtn = createAttrToggleButton("gf", "Gluten Free", () => glutenFreeOnly, (next) => {
       glutenFreeOnly = next;
       saveBoolFilter(STORAGE_KEY_GF, next);
@@ -522,7 +532,7 @@
 
     const barLeft = document.createElement("div");
     barLeft.className = "pal-mealkit-filter-bar-left";
-    barLeft.append(frozenBtn, gfBtn, status);
+    barLeft.append(frozenBtn, refrigeratedBtn, gfBtn, status);
     return barLeft;
   }
 
@@ -569,7 +579,14 @@
   function syncAttrFilterButtons() {
     document.querySelectorAll("#pal-mealkit-filter-bar [data-attr-key]").forEach((button) => {
       const key = button.dataset.attrKey;
-      const on = key === "frozen" ? frozenOnly : key === "gf" ? glutenFreeOnly : false;
+      const on =
+        key === "frozen"
+          ? frozenOnly
+          : key === "refrigerated"
+            ? notRefrigerated
+            : key === "gf"
+              ? glutenFreeOnly
+              : false;
       button.classList.toggle("is-active", on);
       button.setAttribute("aria-pressed", on ? "true" : "false");
     });
@@ -829,6 +846,7 @@
       updateStatus(`表示: ${visibleCount}件 / ${itemNodes.length}件`);
       log("attr filters applied", {
         frozenOnly,
+        notRefrigerated,
         glutenFreeOnly,
         visibleCount,
         total: itemNodes.length,
@@ -841,21 +859,29 @@
     }
   }
 
-  function isItemFrozen(itemNode) {
-    if (itemNode.querySelector(".mark-frozen")) {
+  function itemHasTempMark(itemNode, classSelector, label) {
+    if (classSelector && itemNode.querySelector(classSelector)) {
       return true;
     }
     const marks = itemNode.querySelectorAll(".mark-group .mark, .item-name .mark");
     for (const mark of marks) {
-      if ((mark.textContent || "").includes("冷凍")) {
+      if ((mark.textContent || "").includes(label)) {
         return true;
       }
     }
     const name = itemNode.querySelector(".item-name .name a");
-    if (name && /【冷凍】/.test(name.textContent || "")) {
+    if (name && (name.textContent || "").includes(`【${label}】`)) {
       return true;
     }
     return false;
+  }
+
+  function isItemFrozen(itemNode) {
+    return itemHasTempMark(itemNode, ".mark-frozen", "冷凍");
+  }
+
+  function isItemRefrigerated(itemNode) {
+    return itemHasTempMark(itemNode, ".mark-refrigerated, .mark-chilled", "冷蔵");
   }
 
   /**
@@ -985,6 +1011,11 @@
   function itemMatchesAttributeFilters(itemNode) {
     // "Not 冷凍" — when on, hide frozen items.
     if (frozenOnly && isItemFrozen(itemNode)) {
+      return false;
+    }
+
+    // "Not 冷蔵" — when on, hide refrigerated items.
+    if (notRefrigerated && isItemRefrigerated(itemNode)) {
       return false;
     }
 
